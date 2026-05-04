@@ -1,0 +1,30 @@
+{
+    "semanas": [],
+    "acampantesPorSemana": [],
+    "porEquipo": [
+        {
+            "equipo": "verde",
+            "cabanas": 1,
+            "acampantes": 0
+        },
+        {
+            "equipo": "azul",
+            "cabanas": 1,
+            "acampantes": 0
+        }
+    ],
+    "espiritual": {
+        "total": 0,
+        "recibio_cristo": null,
+        "consagro_vida": null,
+        "era_creyente": null,
+        "asiste_iglesia": null
+    },
+    "consejerias": {
+        "acampantes_con_consejeria": 0,
+        "total_sesiones_unicas": 0,
+        "total_registros": 0
+    },
+    "topIglesias": [],
+    "topDepartamentos": []
+}
