@@ -83,8 +83,8 @@ if ($_POST && isset($_FILES['csv_file'])) {
             'edad'         => detectarColumna($encabezados, ['edad']),
             'sexo'         => detectarColumna($encabezados, ['sexo', 'género', 'genero', 'opcion', 'opción']),
             'primera'      => detectarColumna($encabezados, ['primera vez', 'primera']),
-            'asiste'       => detectarColumna($encabezados, ['asistes', 'asiste', 'iglesia']),
-            'nom_igl'      => detectarColumna($encabezados, ['nombre de la iglesia', 'iglesia']),
+            'asiste'      => detectarColumna($encabezados, ['¿asistes a alguna iglesia?', 'asistes a alguna iglesia', 'asistes a alguna']),
+            'nom_igl'     => detectarColumna($encabezados, ['nombre de la iglesia'], 13),
             'cont_nom'     => detectarColumna($encabezados, ['contacto de emergencia', 'nombre.*contacto', 'contacto']),
             'cont_tel'     => detectarColumna($encabezados, ['número', 'telefono', 'teléfono', 'celular']),
             'suma_pagada'  => detectarColumna($encabezados, ['suma']),           // total acumulado pagado
@@ -133,16 +133,30 @@ if ($_POST && isset($_FILES['csv_file'])) {
             $asiste_raw = $col['asiste'] >= 0 ? strtolower(trim($row[$col['asiste']] ?? '')) : '';
             $asiste = in_array($asiste_raw, ['si', 'sí', 'yes', '1']) ? 1 : 0;
 
-            $iglesia   = $col['nom_igl']  >= 0 ? trim($row[$col['nom_igl']]  ?? '') : '';
+            // nom_igl = "Nombre de la iglesia" (col 13), NO "¿Asistes?" (col 12)
+            $iglesia = $col['nom_igl'] >= 0 ? trim($row[$col['nom_igl']] ?? '') : '';
+            
+            // Sanity check: si por error capturó "Si"/"No", dejar vacío
+            if (in_array(strtolower($iglesia), ['si', 'sí', 'no', 'yes'])) {
+                $iglesia = '';
+            }
             $cont_nom  = $col['cont_nom'] >= 0 ? trim($row[$col['cont_nom']] ?? '') : '';
             $cont_tel  = $col['cont_tel'] >= 0 ? trim($row[$col['cont_tel']] ?? '') : '';
 
-            // ── Costo total del campamento (DEBE PAGAR) ──────────────
-            // Si está vacío o es 0, usar el costo default de la semana
-            $debe_pagar_raw  = $col['debe_pagar'] >= 0 
+            // ── Costo total del campamento (DEBE PAGAR) ──────────────────
+            // Prioridad: 1) CSV  2) costo_campamento de la semana  3) costo_default del form
+            $debe_pagar_raw  = $col['debe_pagar'] >= 0
                 ? trim($row[$col['debe_pagar']] ?? '') : '';
             $costo_acampante = (float)preg_replace('/[^0-9.]/', '', $debe_pagar_raw);
-            if ($costo_acampante <= 0) $costo_acampante = $costo; // fallback: costo de semana
+            
+            if ($costo_acampante <= 0) {
+                // Obtener el precio base de la semana seleccionada
+                $stmt_costo = $pdo->prepare("SELECT costo_campamento FROM semanas_campamento WHERE id = ?");
+                $stmt_costo->execute([$semana_id]);
+                $costo_semana = (float)($stmt_costo->fetchColumn() ?? 0);
+            
+                $costo_acampante = $costo_semana > 0 ? $costo_semana : $costo; // $costo = campo manual del form
+            }
             
             // ── Total acumulado pagado (SUMA) ─────────────────────────
             // Es el total que ha dado hasta ahora, no el abono parcial

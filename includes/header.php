@@ -283,13 +283,13 @@ $_rolBadgeClass = $_esAdmin      ? 'rol-badge-admin'      :
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link<?php echo navActivo('checkin.php'); ?>" href="checkin.php">
-                        <i class="fas fa-qrcode"></i> Check-in
+                    <a class="nav-link<?php echo navActivo('semanas.php'); ?>" href="semanas.php">
+                        <i class="fas fa-calendar-alt"></i> Semanas
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link<?php echo navActivo('importar.php'); ?>" href="importar.php">
-                        <i class="fas fa-file-csv"></i> Importar
+                    <a class="nav-link<?php echo navActivo('estadisticas.php'); ?>" href="estadisticas.php">
+                        <i class="fas fa-chart-bar"></i> Estadísticas
                     </a>
                 </li>
             

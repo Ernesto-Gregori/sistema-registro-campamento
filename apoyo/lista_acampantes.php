@@ -34,19 +34,19 @@ if ($genero_acceso === 'ambos') {
 }
 $cabanas = $stmt->fetchAll();
 
-// Query acampantes
+// Query acampantes — solo los que ya hicieron check-in (llego = 1)
 $params = [];
 if ($semana_id_activa) {
     $sql = "SELECT a.*, c.nombre_cabana 
             FROM acampantes a 
             LEFT JOIN cabanas c ON a.cabana_id = c.id
-            WHERE a.semana_id = ? AND a.estado = 'activo'";
+            WHERE a.semana_id = ? AND a.estado = 'activo' AND a.llego = 1";
     $params[] = $semana_id_activa;
 } else {
     $sql = "SELECT a.*, c.nombre_cabana 
             FROM acampantes a 
             LEFT JOIN cabanas c ON a.cabana_id = c.id
-            WHERE a.year_campamento = ? AND a.estado = 'activo'";
+            WHERE a.year_campamento = ? AND a.estado = 'activo' AND a.llego = 1";
     $params[] = obtenerAnioCampamento();
 }
 
@@ -107,8 +107,11 @@ include '../includes/header.php';
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">
-            <i class="fas fa-list"></i> Acampantes Registrados
-            <span class="badge bg-primary ms-2"><?php echo count($acampantes); ?></span>
+            <i class="fas fa-map-marker-alt"></i> Acampantes en Campamento
+            <span class="badge bg-success ms-2"><?php echo count($acampantes); ?></span>
+            <small class="text-muted fw-normal ms-2" style="font-size:12px;">
+                Solo con check-in confirmado
+            </small>
         </h5>
         <a href="registrar_acampante.php" class="btn btn-success btn-sm <?php echo !$semana_activa ? 'disabled' : ''; ?>">
             <i class="fas fa-plus"></i> Nuevo Registro

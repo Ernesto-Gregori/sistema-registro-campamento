@@ -95,6 +95,13 @@ $action = $_GET['action'] ?? 'list';
 $id = $_GET['id'] ?? null;  
 $message = '';  
 $error = '';  
+$acampante   = null;
+$consejerias = [];
+
+// Generar token CSRF
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
   
 // Procesar acciones  
 if ($_POST) {  
@@ -270,82 +277,72 @@ if ($_POST) {
     }  
 }  
   
-// Eliminar acampante REAL  
-if ($action === 'delete' && $id) {  
-    try {  
-        $pdo->beginTransaction();  
-          
-        // Primero eliminar consejerías relacionadas  
-        $stmt = $pdo->prepare("DELETE FROM sesiones_consejeria WHERE acampante_id = ?");  
-        $stmt->execute([$id]);  
-          
-        // Luego eliminar evaluación espiritual  
-        $stmt = $pdo->prepare("DELETE FROM evaluacion_espiritual WHERE acampante_id = ?");  
-        $stmt->execute([$id]);  
-          
-        // Finalmente eliminar el acampante  
-        $stmt = $pdo->prepare("DELETE FROM acampantes WHERE id = ?");  
-        $stmt->execute([$id]);  
-          
-        $pdo->commit();  
-        header("Location: acampantes.php?message=" . urlencode("Acampante eliminado permanentemente"));  
-        exit();  
-    } catch (Exception $e) {  
-        $pdo->rollBack();  
-        $error = "Error al eliminar: " . $e->getMessage();  
-    }  
-} 
+// Eliminar acampante — REQUIERE POST + token CSRF
+if ($action === 'delete' && $id) {
+    // ⛔ Bloquear DELETE via GET (previene borrado accidental/SW prefetch)
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        header("Location: acampantes.php");
+        exit();
+    }
+    // Verificar token CSRF
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== ($_SESSION['csrf_token'] ?? '')) {
+        $error = "Token de seguridad inválido. Intenta de nuevo.";
+    } else {
+        try {
+            $pdo->beginTransaction();
+            
+            $stmt = $pdo->prepare("DELETE FROM sesiones_consejeria WHERE acampante_id = ?");
+            $stmt->execute([$id]);
+            
+            $stmt = $pdo->prepare("DELETE FROM evaluacion_espiritual WHERE acampante_id = ?");
+            $stmt->execute([$id]);
+            
+            $stmt = $pdo->prepare("DELETE FROM acampantes WHERE id = ?");
+            $stmt->execute([$id]);
+            
+            $pdo->commit();
+            header("Location: acampantes.php?message=" . urlencode("Acampante eliminado permanentemente"));
+            exit();
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            $error = "Error al eliminar: " . $e->getMessage();
+        }
+    }
+}
 
-// Ver detalle del acampante  
-if ($action === 'view' && $id) {  
-    try {  
-        
-        $stmt = $pdo->prepare("SELECT a.*, c.nombre_cabana   
-                              FROM acampantes a   
-                              LEFT JOIN cabanas c ON a.cabana_id = c.id   
-                              WHERE a.id = ?");  
-        $stmt->execute([$id]);  
-        $acampante = $stmt->fetch();  
-          
-          
-        if (!$acampante) {  
-            $error = "Acampante no encontrado";  
-            $action = 'list';  
-        } else {  
-            // Obtener consejerías  
-            $stmt = $pdo->prepare("SELECT sc.*, tc.categoria, tc.tema as tema_predefinido, u.username  
-                                  FROM sesiones_consejeria sc  
-                                  LEFT JOIN temas_consejeria tc ON sc.tema_id = tc.id  
-                                  LEFT JOIN usuarios u ON sc.consejero_id = u.id  
-                                  WHERE sc.acampante_id = ?  
-                                  ORDER BY sc.numero_sesion DESC, sc.fecha_sesion DESC");  
-            $stmt->execute([$id]);  
-            $consejerias = $stmt->fetchAll();  
-        }  
-    } catch (Exception $e) {  
-        $error = "Error al obtener acampante: " . $e->getMessage();  
-        $action = 'list';  
-    }  
-}  
-  
-// Obtener datos para editar/ver
-$acampante = null;
-if (($action === 'edit' || $action === 'view') && $id) {
+// ── Obtener datos del acampante (view / edit) ────────────────────────
+$acampante  = null;
+$consejerias = [];
+
+if (($action === 'view' || $action === 'edit') && $id) {
     try {
-        // ⭐ Incluir JOIN con cabanas para traer nombre_cabana
-        $stmt = $pdo->prepare("SELECT a.*, c.nombre_cabana 
-                               FROM acampantes a 
-                               LEFT JOIN cabanas c ON a.cabana_id = c.id
-                               WHERE a.id = ?");
+        $stmt = $pdo->prepare("
+            SELECT a.*, c.nombre_cabana 
+            FROM acampantes a 
+            LEFT JOIN cabanas c ON a.cabana_id = c.id
+            WHERE a.id = ?
+        ");
         $stmt->execute([$id]);
         $acampante = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$acampante) {
-            $error = "Acampante no encontrado";
+            $error  = "Acampante no encontrado (ID: $id)";
             $action = 'list';
+        } elseif ($action === 'view') {
+            // Cargar consejerías solo en la vista de detalle
+            $stmt = $pdo->prepare("
+                SELECT sc.*, tc.categoria, tc.tema AS tema_predefinido, u.username
+                FROM sesiones_consejeria sc
+                LEFT JOIN temas_consejeria tc ON sc.tema_id = tc.id
+                LEFT JOIN usuarios u ON sc.consejero_id = u.id
+                WHERE sc.acampante_id = ?
+                ORDER BY sc.numero_sesion DESC, sc.fecha_sesion DESC
+            ");
+            $stmt->execute([$id]);
+            $consejerias = $stmt->fetchAll();
         }
     } catch (Exception $e) {
-        $error = "Error: " . $e->getMessage();
+        $error  = "Error: " . $e->getMessage();
         $action = 'list';
     }
 }   
@@ -383,11 +380,12 @@ if ($action === 'list') {
     $semanas_filtro = $stmt_semanas->fetchAll();
 
     $sql = "SELECT a.*, c.nombre_cabana, c.equipo as cabana_equipo,
-                   s.nombre as semana_nombre, s.activa as semana_activa
+               s.nombre as semana_nombre, s.activa as semana_activa
             FROM acampantes a   
             LEFT JOIN cabanas c ON a.cabana_id = c.id
             LEFT JOIN semanas_campamento s ON a.semana_id = s.id
-            WHERE a.year_campamento = ? AND a.estado = 'activo'";  
+            WHERE a.year_campamento = ? AND a.estado = 'activo'
+              AND a.llego = 1";
     $params = [(int)obtenerAnioCampamento()];
     
     if ($semana_filter) {
@@ -470,7 +468,13 @@ include '../includes/header.php';
 <!-- Lista de acampantes -->  
 <div class="card">  
     <div class="card-header d-flex justify-content-between align-items-center">  
-        <h5><i class="fas fa-users"></i> Lista de Acampantes (<?php echo count($acampantes); ?>)</h5>  
+        <h5>
+            <i class="fas fa-users"></i> Acampantes con Check-in
+            <span class="badge bg-success ms-1"><?php echo count($acampantes); ?></span>
+            <small class="text-muted fw-normal fs-6 ms-2">
+                <i class="fas fa-map-marker-alt"></i> Solo acampantes que ya llegaron al campamento
+            </small>
+        </h5> 
         <div class="btn-group">  
             <a href="acampantes.php?action=add" class="btn btn-success">  
                 <i class="fas fa-plus"></i> Agregar Individual  
@@ -716,11 +720,15 @@ include '../includes/header.php';
                                    class="btn btn-sm btn-outline-primary" title="Editar">
                                     <i class="fas fa-edit"></i> Editar
                                 </a>
-                                <a href="acampantes.php?action=delete&id=<?php echo $camp['id']; ?>"
-                                   class="btn btn-sm btn-outline-danger" title="Eliminar"
-                                   onclick="return confirmarEliminacion('¿Eliminar este acampante?')">
+                                <form method="POST" 
+                                  action="acampantes.php?action=delete&id=<?php echo $camp['id']; ?>"
+                                  onsubmit="return confirmarEliminacion('¿Eliminar permanentemente a <?php echo htmlspecialchars(addslashes($camp['nombre'])); ?>?')"
+                                  style="display:inline;">
+                                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Eliminar">
                                     <i class="fas fa-trash"></i>
-                                </a>
+                                </button>
+                            </form>
                             </div>
                         </td>
                     </tr>
