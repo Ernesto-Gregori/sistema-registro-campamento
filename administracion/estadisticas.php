@@ -6,7 +6,7 @@ require_once '../config/database.php';
 require_once '../includes/functions.php';
 
 verificarLogin();
-if (!esAdmisiones() && !esAdministrador()) {
+if (!esAdministracion() && !esAdministrador()) {
     header('Location: ../login.php');
     exit();
 }
@@ -67,14 +67,14 @@ if (!$semana_id || !$semana_actual) {
 // ── BLOQUE 1: Resumen hombres / mujeres ─────────────────────────────────────
 $stmt = $pdo->prepare("
     SELECT
-        COALESCE(SUM(sexo = 'masculino'), 0)                                   AS hombres_inscritos,
-        COALESCE(SUM(sexo = 'femenino'), 0)                                    AS mujeres_inscritas,
-        COALESCE(SUM(sexo = 'masculino' AND documentos_revisados = 1), 0)      AS hombres_docs_ok,
-        COALESCE(SUM(sexo = 'femenino'  AND documentos_revisados = 1), 0)      AS mujeres_docs_ok,
-        COUNT(*)                                                               AS total_inscritos,
-        COALESCE(SUM(documentos_revisados = 1), 0)                             AS total_docs_ok,
-        COALESCE(SUM(primera_vez_campamento = 1), 0)                           AS primera_vez_inscritos,
-        COALESCE(SUM(primera_vez_campamento = 1 AND documentos_revisados = 1), 0) AS primera_vez_docs_ok
+        COALESCE(SUM(sexo = 'masculino'), 0)                        AS hombres_inscritos,
+        COALESCE(SUM(sexo = 'femenino'), 0)                         AS mujeres_inscritas,
+        COALESCE(SUM(sexo = 'masculino' AND llego = 1), 0)          AS hombres_llegaron,
+        COALESCE(SUM(sexo = 'femenino'  AND llego = 1), 0)          AS mujeres_llegaron,
+        COUNT(*)                                                    AS total_inscritos,
+        COALESCE(SUM(llego = 1), 0)                                 AS total_llegaron,
+        COALESCE(SUM(primera_vez_campamento = 1), 0)                AS primera_vez_inscritos,
+        COALESCE(SUM(primera_vez_campamento = 1 AND llego = 1), 0)  AS primera_vez_llegaron
     FROM acampantes
     WHERE semana_id = ? AND estado = 'activo'
 ");
@@ -83,10 +83,10 @@ $resumen = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$resumen || $resumen['total_inscritos'] === null) {
     $resumen = [
-        'hombres_inscritos'   => 0, 'mujeres_inscritas'  => 0,
-        'hombres_docs_ok'     => 0, 'mujeres_docs_ok'    => 0,
-        'total_inscritos'     => 0, 'total_docs_ok'      => 0,
-        'primera_vez_inscritos' => 0, 'primera_vez_docs_ok' => 0,
+        'hombres_inscritos' => 0, 'mujeres_inscritas' => 0,
+        'hombres_llegaron'  => 0, 'mujeres_llegaron'  => 0,
+        'total_inscritos'   => 0, 'total_llegaron'    => 0,
+        'primera_vez_inscritos' => 0, 'primera_vez_llegaron' => 0,
     ];
 }
 
@@ -177,9 +177,9 @@ $ig_offset      = ($ig_page - 1) * $ig_per_page;
 $sql_igl  = "
     SELECT
         a.iglesia,
-        COUNT(*)                                      AS inscritos,
-        COALESCE(SUM(a.documentos_revisados = 1), 0)  AS llegaron,
-        COALESCE(SUM(a.costo_total), 0)               AS total_esperado,
+        COUNT(*)                             AS inscritos,
+        COALESCE(SUM(a.llego = 1), 0)        AS llegaron,
+        COALESCE(SUM(a.costo_total), 0)      AS total_esperado,
         COALESCE(
             (SELECT SUM(p2.monto)
              FROM pagos_acampante p2
@@ -239,7 +239,7 @@ $stmt = $pdo->prepare("
             (SELECT COUNT(*)
              FROM acampantes a
              WHERE a.grupo_id = g.id AND a.estado = 'activo'
-               AND a.documentos_revisados = 1), 0)                  AS total_docs_ok
+               AND a.llego = 1), 0)                                 AS total_llegaron
     FROM grupos_campamento g
     WHERE g.semana_id = ? AND g.estado = 'activo'
     ORDER BY g.encargado_nombre
@@ -251,7 +251,7 @@ $grupos_campamento = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $stmt = $pdo->prepare("
     SELECT
         a.id, a.nombre, a.sexo, a.edad, a.iglesia,
-        a.documentos_revisados, a.documentos_revisados_at,
+        a.llego, a.fecha_llegada,
         g.encargado_nombre AS grupo_nombre
     FROM acampantes a
     LEFT JOIN grupos_campamento g ON g.id = a.grupo_id
@@ -320,40 +320,35 @@ include '../includes/header.php';
             </div>
         </div>
     </div>
-    <!-- Tarjeta 2: Han Llegado → Docs Revisados -->
     <div class="col-sm-6 col-lg-3">
         <div class="card border-0 bg-success text-white h-100">
             <div class="card-body text-center py-4">
-                <i class="fas fa-clipboard-check fa-2x mb-2 opacity-75"></i>
-                <h2 class="fw-bold mb-0"><?= $resumen['total_docs_ok'] ?></h2>
-                <div class="small opacity-75">Docs Revisados</div>
+                <i class="fas fa-map-marker-alt fa-2x mb-2 opacity-75"></i>
+                <h2 class="fw-bold mb-0"><?= $resumen['total_llegaron'] ?></h2>
+                <div class="small opacity-75">Han Llegado</div>
             </div>
         </div>
     </div>
-    
-    <!-- Tarjeta 3: Primera vez llegaron → Primera vez con docs OK -->
     <div class="col-sm-6 col-lg-3">
         <div class="card border-0 bg-warning text-dark h-100">
             <div class="card-body text-center py-4">
                 <i class="fas fa-star fa-2x mb-2 opacity-75"></i>
-                <h2 class="fw-bold mb-0"><?= $resumen['primera_vez_docs_ok'] ?></h2>
+                <h2 class="fw-bold mb-0"><?= $resumen['primera_vez_llegaron'] ?></h2>
                 <div class="small opacity-50">
-                    Primera vez — docs OK
+                    Primera vez llegaron
                     <span class="fw-bold d-block">(<?= $resumen['primera_vez_inscritos'] ?> inscritos)</span>
                 </div>
             </div>
         </div>
     </div>
-    
-    <!-- Tarjeta 4: Pendientes de llegar → Pendientes de revisar docs -->
     <div class="col-sm-6 col-lg-3">
         <div class="card border-0 bg-danger text-white h-100">
             <div class="card-body text-center py-4">
                 <i class="fas fa-hourglass-half fa-2x mb-2 opacity-75"></i>
                 <h2 class="fw-bold mb-0">
-                    <?= $resumen['total_inscritos'] - $resumen['total_docs_ok'] ?>
+                    <?= $resumen['total_inscritos'] - $resumen['total_llegaron'] ?>
                 </h2>
-                <div class="small opacity-75">Docs pendientes</div>
+                <div class="small opacity-75">Pendientes de llegar</div>
             </div>
         </div>
     </div>
@@ -368,28 +363,28 @@ include '../includes/header.php';
             </div>
             <div class="card-body p-0">
                 <table class="table table-bordered mb-0 text-center">
-                    <thead>
+                    <thead class="table-secondary">
                         <tr>
                             <th class="text-start ps-3"></th>
                             <th>Inscritos</th>
-                            <th>Docs OK</th>
+                            <th>Llegaron</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr class="table-primary">
                             <td class="fw-bold text-start ps-3"><i class="fas fa-mars"></i> Hombre</td>
                             <td class="fw-bold fs-5"><?= $resumen['hombres_inscritos'] ?></td>
-                            <td class="fw-bold fs-5 text-success"><?= $resumen['hombres_docs_ok'] ?></td>
+                            <td class="fw-bold fs-5 text-success"><?= $resumen['hombres_llegaron'] ?></td>
                         </tr>
                         <tr class="table-danger">
                             <td class="fw-bold text-start ps-3"><i class="fas fa-venus"></i> Mujer</td>
                             <td class="fw-bold fs-5"><?= $resumen['mujeres_inscritas'] ?></td>
-                            <td class="fw-bold fs-5 text-success"><?= $resumen['mujeres_docs_ok'] ?></td>
+                            <td class="fw-bold fs-5 text-success"><?= $resumen['mujeres_llegaron'] ?></td>
                         </tr>
                         <tr class="table-dark text-white">
                             <td class="fw-bold text-start ps-3">TOTAL</td>
                             <td class="fw-bold fs-5"><?= $resumen['total_inscritos'] ?></td>
-                            <td class="fw-bold fs-5"><?= $resumen['total_docs_ok'] ?></td>
+                            <td class="fw-bold fs-5"><?= $resumen['total_llegaron'] ?></td>
                         </tr>
                     </tbody>
                 </table>
@@ -491,7 +486,7 @@ include '../includes/header.php';
         $g_total_ac  = array_sum(array_column($grupos_campamento, 'total_acampantes'));
         $g_total_pag = array_sum(array_column($grupos_campamento, 'total_pagado'));
         $g_total_cos = array_sum(array_column($grupos_campamento, 'costo_total_real'));
-        $g_total_docs = array_sum(array_column($grupos_campamento, 'total_docs_ok'));
+        $g_total_lle = array_sum(array_column($grupos_campamento, 'total_llegaron'));
         ?>
         <small class="text-muted">
             <?= $g_total_ac ?> acampantes · $<?= number_format($g_total_cos, 0) ?> esperado
@@ -505,7 +500,7 @@ include '../includes/header.php';
                         <th>#</th>
                         <th>Grupo / Encargado</th>
                         <th class="text-center">Acampantes</th>
-                        <th class="text-center">Docs OK</th>
+                        <th class="text-center">Check-in</th>
                         <th class="text-center" style="min-width:110px;">% Asistencia</th>
                         <th class="text-end">Costo</th>
                         <th class="text-end">Pagado</th>
@@ -521,8 +516,8 @@ include '../includes/header.php';
                     $es_beca_gr    = ($costo_gr == 0 && $gr['total_acampantes'] > 0);
                     $pagado_100_gr = $es_beca_gr || ($costo_gr > 0 && $pagado_gr >= $costo_gr);
                     $pct_gr        = $costo_gr > 0 ? min(100, round($pagado_gr / $costo_gr * 100)) : ($pagado_100_gr ? 100 : 0);
-                    $pct_asist_gr = $gr['total_acampantes'] > 0
-                        ? round(($gr['total_docs_ok'] / $gr['total_acampantes']) * 100) : 0;
+                    $pct_asist_gr  = $gr['total_acampantes'] > 0
+                        ? round(($gr['total_llegaron'] / $gr['total_acampantes']) * 100) : 0;
                 ?>
                 <tr class="<?= $pagado_100_gr ? 'table-success' : '' ?>">
                     <td class="text-muted small"><?= $gi + 1 ?></td>
@@ -533,9 +528,7 @@ include '../includes/header.php';
                         </a>
                     </td>
                     <td class="text-center"><span class="badge bg-primary"><?= $gr['total_acampantes'] ?></span></td>
-                    <td class="text-center">
-                        <span class="badge bg-success"><?= $gr['total_docs_ok'] ?></span>
-                    </td>
+                    <td class="text-center"><span class="badge bg-success"><?= $gr['total_llegaron'] ?></span></td>
                     <td>
                         <div class="d-flex align-items-center gap-2">
                             <div class="progress flex-grow-1" style="height:6px;">
@@ -575,7 +568,7 @@ include '../includes/header.php';
                 <tr class="table-dark fw-bold">
                     <td colspan="2">TOTALES</td>
                     <td class="text-center"><?= $g_total_ac ?></td>
-                    <td class="text-center"><?= $g_total_docs ?></td>
+                    <td class="text-center"><?= $g_total_lle ?></td>
                     <td></td>
                     <td class="text-end">$<?= number_format($g_total_cos, 0) ?></td>
                     <td class="text-end text-success">$<?= number_format($g_total_pag, 0) ?></td>
@@ -591,7 +584,7 @@ include '../includes/header.php';
 
 <!-- ══ §4 BECADOS ══ -->
 <?php if (!empty($becados)):
-    $becados_docs_ok = count(array_filter($becados, fn($b) => $b['documentos_revisados']));
+    $becados_llegaron = count(array_filter($becados, fn($b) => $b['llego']));
 ?>
 <div class="section-label text-uppercase text-muted small fw-bold mb-2 ps-1">
     <i class="fas fa-award fa-xs me-1"></i> Becados
@@ -604,7 +597,7 @@ include '../includes/header.php';
         </h6>
         <small>
             <i class="fas fa-check-circle"></i>
-            <?= $becados_docs_ok ?> de <?= count($becados) ?> con docs OK
+            <?= $becados_llegaron ?> de <?= count($becados) ?> han llegado
         </small>
     </div>
     <div class="card-body p-0">
@@ -618,12 +611,12 @@ include '../includes/header.php';
                         <th class="text-center">Edad</th>
                         <th>Iglesia</th>
                         <th>Grupo</th>
-                        <th class="text-center">Docs</th>
+                        <th class="text-center">Check-in</th>
                     </tr>
                 </thead>
                 <tbody>
                 <?php foreach ($becados as $bi => $b): ?>
-                <tr class="<?= $b['documentos_revisados'] ? 'table-success' : '' ?>">
+                <tr class="<?= $b['llego'] ? 'table-success' : '' ?>">
                     <td class="text-muted small"><?= $bi + 1 ?></td>
                     <td class="fw-bold"><?= htmlspecialchars($b['nombre']) ?></td>
                     <td class="text-center">
@@ -645,19 +638,15 @@ include '../includes/header.php';
                             : '<span class="text-muted">—</span>' ?>
                     </td>
                     <td class="text-center">
-                        <?php if ($b['documentos_revisados']): ?>
-                            <span class="badge bg-success">
-                                <i class="fas fa-check-double fa-xs"></i> Revisado
-                            </span>
-                            <?php if ($b['documentos_revisados_at']): ?>
+                        <?php if ($b['llego']): ?>
+                            <span class="badge bg-success"><i class="fas fa-check"></i> Sí</span>
+                            <?php if ($b['fecha_llegada']): ?>
                             <br><small class="text-muted" style="font-size:.7rem;">
-                                <?= date('d/m H:i', strtotime($b['documentos_revisados_at'])) ?>
+                                <?= date('d/m H:i', strtotime($b['fecha_llegada'])) ?>
                             </small>
                             <?php endif; ?>
                         <?php else: ?>
-                            <span class="badge bg-secondary">
-                                <i class="fas fa-hourglass-start fa-xs"></i> Pendiente
-                            </span>
+                            <span class="badge bg-secondary"><i class="fas fa-clock"></i> Pendiente</span>
                         <?php endif; ?>
                     </td>
                 </tr>
@@ -667,8 +656,8 @@ include '../includes/header.php';
                     <tr>
                         <td colspan="6">
                             Total: <strong><?= count($becados) ?></strong>
-                            &nbsp;·&nbsp; Docs OK: <strong class="text-success"><?= $becados_docs_ok ?></strong>
-                            &nbsp;·&nbsp; Pendientes: <strong class="text-danger"><?= count($becados) - $becados_docs_ok ?></strong>
+                            &nbsp;·&nbsp; Llegaron: <strong class="text-success"><?= $becados_llegaron ?></strong>
+                            &nbsp;·&nbsp; Pendientes: <strong class="text-danger"><?= count($becados) - $becados_llegaron ?></strong>
                         </td>
                         <td></td>
                     </tr>
@@ -721,7 +710,7 @@ include '../includes/header.php';
                         <th>#</th>
                         <th>Iglesia</th>
                         <th class="text-center">Inscritos</th>
-                        <th class="text-center">Docs OK</th>
+                        <th class="text-center">Llegaron</th>
                         <th class="text-center" style="min-width:110px;">% Asistencia</th>
                         <th class="text-end">Esperado</th>
                         <th class="text-end">Pagado</th>

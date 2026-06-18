@@ -221,6 +221,10 @@ letter-spacing: 0.3px;
     font-weight: 600;
     letter-spacing: 0.3px;
 }
+.rol-badge-administracion {
+    background-color: #198754;   /* verde Bootstrap success */
+    color: #fff;
+}
 
 /* ── Semana pill ── */
 .semana-pill {

@@ -99,22 +99,12 @@ if ($_POST && $semana_id_activa) {
             // Validar rango de edad
             $edad_autorizada = isset($_POST['edad_autorizada']) ? 1 : 0;
             if (!empty($edad)) {
-                $stmt_rango = $pdo->prepare("SELECT edad_min, edad_max, descripcion
-                                             FROM cabana_rangos_edad
-                                             WHERE cabana_id = ? AND semana_id = ?");
-                $stmt_rango->execute([$cabana_id, $semana_id_activa]);
-                $rango = $stmt_rango->fetch();
-    
-                if ($rango) {
-                    $fueraDeRango = ($edad < $rango['edad_min'] || $edad > $rango['edad_max']);
-                    if ($fueraDeRango && !$edad_autorizada) {
-                        $desc = !empty($rango['descripcion']) ? " ({$rango['descripcion']})" : '';
-                        throw new Exception(
-                            "La edad ({$edad} años) está fuera del rango de esta cabaña: " .
-                            "{$rango['edad_min']}–{$rango['edad_max']} años{$desc}. " .
-                            "Marca la casilla de autorización si deseas registrarlo de todas formas."
-                        );
-                    }
+                $val_edad = validarEdadAcampante($pdo, (int)$edad, $semana_id_activa, $cabana_id);
+                if (!$val_edad['valido'] && !$edad_autorizada) {
+                    throw new Exception(
+                        $val_edad['mensaje'] .
+                        " Marca la casilla de autorización si deseas registrarlo de todas formas."
+                    );
                 }
             }
         }
@@ -149,16 +139,49 @@ if ($_POST && $semana_id_activa) {
 $rangosEdadJS = [];
 try {
     if ($semana_id_activa) {
-        $stmt_r = $pdo->prepare("SELECT cabana_id, edad_min, edad_max, descripcion
-                                  FROM cabana_rangos_edad
-                                  WHERE semana_id = ?");
-        $stmt_r->execute([$semana_id_activa]);
-        foreach ($stmt_r->fetchAll() as $r) {
-            $rangosEdadJS[$r['cabana_id']] = [
-                'min'  => $r['edad_min'],
-                'max'  => $r['edad_max'],
-                'desc' => $r['descripcion'] ?? ''
+        // Límite base de la semana
+        $stmt_sem_lim = $pdo->prepare("
+            SELECT edad_min, edad_max FROM semanas_campamento WHERE id = ?
+        ");
+        $stmt_sem_lim->execute([$semana_id_activa]);
+        $limSem = $stmt_sem_lim->fetch();
+        $emin_sem = $limSem['edad_min'] ?? null;
+        $emax_sem = $limSem['edad_max'] ?? null;
+
+        // Config específica por cabaña para esta semana
+        $stmt_csc = $pdo->prepare("
+            SELECT cabana_id, edad_min, edad_max
+            FROM cabana_semana_config
+            WHERE semana_id = ?
+        ");
+        $stmt_csc->execute([$semana_id_activa]);
+        $cfgCabana = [];
+        foreach ($stmt_csc->fetchAll() as $row) {
+            $cfgCabana[$row['cabana_id']] = [
+                'min' => $row['edad_min'],
+                'max' => $row['edad_max'],
             ];
+        }
+
+        // Construir mapa final para cada cabaña visible
+        foreach ($cabanas as $cab) {
+            $cabId = $cab['id'];
+            $emin  = $emin_sem;
+            $emax  = $emax_sem;
+
+            // Config propia sobreescribe
+            if (isset($cfgCabana[$cabId])) {
+                if ($cfgCabana[$cabId]['min'] !== null) $emin = $cfgCabana[$cabId]['min'];
+                if ($cfgCabana[$cabId]['max'] !== null) $emax = $cfgCabana[$cabId]['max'];
+            }
+
+            if ($emin !== null || $emax !== null) {
+                $rangosEdadJS[$cabId] = [
+                    'min'  => $emin,
+                    'max'  => $emax,
+                    'desc' => ''
+                ];
+            }
         }
     }
 } catch (Exception $e) {

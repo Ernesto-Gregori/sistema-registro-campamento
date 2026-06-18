@@ -52,7 +52,8 @@ if ($semana_id_activa) {
 
 // Filtrar por género de acceso del usuario
 if ($genero_acceso !== 'ambos') {
-    $sql .= " AND c.genero = ?";
+    $sql .= " AND (a.sexo = ? OR (a.cabana_id IS NOT NULL AND c.genero = ?))";
+    $params[] = $genero_acceso;
     $params[] = $genero_acceso;
 }
 

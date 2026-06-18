@@ -58,6 +58,59 @@ foreach ($conteoPorSemana as $row) {
     $ocupadosPorSemana[$row['semana_id']][$row['cabana_id']] = $row['ocupados'];
 }
 
+// ── Rangos de edad efectivos para la semana del acampante ────────────────────
+$rangosEdadJS = [];
+$semana_id_acampante = $acampante['semana_id'] ?? $semana_id_activa;
+try {
+    if ($semana_id_acampante) {
+        // Límite base de la semana
+        $stmt_lim = $pdo->prepare("
+            SELECT edad_min, edad_max FROM semanas_campamento WHERE id = ?
+        ");
+        $stmt_lim->execute([$semana_id_acampante]);
+        $limSem = $stmt_lim->fetch();
+        $emin_sem = $limSem['edad_min'] ?? null;
+        $emax_sem = $limSem['edad_max'] ?? null;
+
+        // Config específica por cabaña para esa semana
+        $stmt_csc = $pdo->prepare("
+            SELECT cabana_id, edad_min, edad_max
+            FROM cabana_semana_config
+            WHERE semana_id = ?
+        ");
+        $stmt_csc->execute([$semana_id_acampante]);
+        $cfgCabana = [];
+        foreach ($stmt_csc->fetchAll() as $row) {
+            $cfgCabana[$row['cabana_id']] = [
+                'min' => $row['edad_min'],
+                'max' => $row['edad_max'],
+            ];
+        }
+
+        // Construir mapa final por cabaña
+        foreach ($cabanas as $cab) {
+            $cabId = $cab['id'];
+            $emin  = $emin_sem;
+            $emax  = $emax_sem;
+
+            // Config propia sobreescribe
+            if (isset($cfgCabana[$cabId])) {
+                if ($cfgCabana[$cabId]['min'] !== null) $emin = $cfgCabana[$cabId]['min'];
+                if ($cfgCabana[$cabId]['max'] !== null) $emax = $cfgCabana[$cabId]['max'];
+            }
+
+            if ($emin !== null || $emax !== null) {
+                $rangosEdadJS[$cabId] = [
+                    'min' => $emin,
+                    'max' => $emax,
+                ];
+            }
+        }
+    }
+} catch (Exception $e) {
+    $rangosEdadJS = [];
+}
+
 // Procesar formulario
 if ($_POST) {
     try {
@@ -102,9 +155,21 @@ if ($_POST) {
             }
         }
 
-        // UPDATE
+        // Validar rango de edad con el nuevo sistema
+        $edad_autorizada = isset($_POST['edad_autorizada']) ? 1 : 0;
+        if (!empty($edad) && $semana_id_acampante) {
+            $val_edad = validarEdadAcampante($pdo, (int)$edad, $semana_id_acampante, $cabana_id);
+            if (!$val_edad['valido'] && !$edad_autorizada) {
+                throw new Exception(
+                    $val_edad['mensaje'] .
+                    " Marca la casilla de autorización si deseas guardarlo de todas formas."
+                );
+            }
+        }
+
+        // UPDATE — agregar edad_autorizada al SET
         $stmt = $pdo->prepare("UPDATE acampantes SET
-                              nombre = ?, edad = ?, sexo = ?, iglesia = ?,
+                              nombre = ?, edad = ?, edad_autorizada = ?, sexo = ?, iglesia = ?,
                               estado_origen = ?,
                               contacto_emergencia_nombre = ?,
                               contacto_emergencia_telefono = ?,
@@ -113,7 +178,7 @@ if ($_POST) {
                               cabana_id = ?
                               WHERE id = ?");
         $stmt->execute([
-            $nombre, $edad, $sexo, $iglesia, $estado_origen,
+            $nombre, $edad, $edad_autorizada, $sexo, $iglesia, $estado_origen,
             $contacto_emergencia_nombre, $contacto_emergencia_telefono,
             $alergias_enfermedades, $observaciones,
             $cabana_id, $id
@@ -199,6 +264,7 @@ include '../includes/header.php';
                         <div class="col-md-6 mb-3">
                             <label class="form-label"><strong>Edad</strong></label>
                             <input type="number" class="form-control" name="edad"
+                                   id="campo_edad"
                                    value="<?php echo $acampante['edad'] ?? ''; ?>"
                                    min="1" max="100">
                         </div>
@@ -234,6 +300,32 @@ include '../includes/header.php';
                             <?php endforeach; ?>
                         </select>
                     </div>
+                    
+                    <!-- Alerta rango de edad + autorización -->
+                    <div id="bloque_rango_edad" class="mb-3" style="display:none;">
+                        <div class="alert alert-warning py-2 small mb-2">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <span id="texto_rango">La edad no está en el rango configurado.</span>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="edad_autorizada"
+                                   name="edad_autorizada" value="1"
+                                   <?php echo !empty($acampante['edad_autorizada']) ? 'checked' : ''; ?>>
+                            <label class="form-check-label small fw-bold text-danger" for="edad_autorizada">
+                                <i class="fas fa-user-check"></i>
+                                Autorizo el ingreso aunque la edad esté fuera del rango
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Badge si ya estaba autorizado -->
+                    <?php if (!empty($acampante['edad_autorizada'])): ?>
+                    <div class="alert alert-warning py-2 small mb-3">
+                        <i class="fas fa-user-check"></i>
+                        <strong>Ingreso autorizado:</strong>
+                        Este acampante fue registrado con autorización especial de edad.
+                    </div>
+                    <?php endif; ?>
 
                     <h6 class="border-bottom pb-2 mb-3 mt-4">
                         <i class="fas fa-phone-alt"></i> Contacto de Emergencia
@@ -360,51 +452,97 @@ include '../includes/header.php';
 </div>
 
 <script>
+const rangosEdad    = <?php echo json_encode($rangosEdadJS ?? []); ?>;
+
 document.addEventListener('DOMContentLoaded', function() {
-    const sexoSelect = document.getElementById('sexo');
+    const sexoSelect  = document.getElementById('sexo');
     const cabanaSelect = document.getElementById('cabana_id');
-    const infoCabana = document.getElementById('info_cabana');
+    const infoCabana  = document.getElementById('info_cabana');
     const barraCabana = document.getElementById('barra_cabana');
     const textoCabana = document.getElementById('texto_cabana');
     const alertaGenero = document.getElementById('alerta_genero');
+    const campoEdad   = document.getElementById('campo_edad');
+    const bloqueRango = document.getElementById('bloque_rango_edad');
+    const textoRango  = document.getElementById('texto_rango');
+    const chkAuto     = document.getElementById('edad_autorizada');
 
     function actualizarInfoCabana() {
         const selected = cabanaSelect.options[cabanaSelect.selectedIndex];
         if (!selected || !selected.value) {
-            infoCabana.style.display = 'none';
+            infoCabana.style.display  = 'none';
             alertaGenero.style.display = 'none';
             return;
         }
 
-        const capacidad = parseInt(selected.dataset.capacidad) || 0;
-        const ocupados = parseInt(selected.dataset.ocupados) || 0;
+        const capacidad   = parseInt(selected.dataset.capacidad) || 0;
+        const ocupados    = parseInt(selected.dataset.ocupados)  || 0;
         const disponibles = capacidad - ocupados;
-        const pct = capacidad > 0 ? (ocupados / capacidad) * 100 : 0;
+        const pct         = capacidad > 0 ? (ocupados / capacidad) * 100 : 0;
         const generoCabana = selected.dataset.genero;
-        const sexoActual = sexoSelect.value;
+        const sexoActual   = sexoSelect.value;
 
         let color = 'bg-success';
         if (pct >= 90) color = 'bg-danger';
         else if (pct >= 70) color = 'bg-warning';
 
-        barraCabana.style.width = Math.min(100, pct) + '%';
-        barraCabana.className = 'progress-bar ' + color;
-        textoCabana.textContent = `${ocupados}/${capacidad} acampantes · ${disponibles} lugar(es) disponible(s)`;
-        textoCabana.className = disponibles <= 0 ? 'text-danger small fw-bold' : 'text-muted small';
+        barraCabana.style.width  = Math.min(100, pct) + '%';
+        barraCabana.className    = 'progress-bar ' + color;
+        textoCabana.textContent  = `${ocupados}/${capacidad} acampantes · ${disponibles} lugar(es) disponible(s)`;
+        textoCabana.className    = disponibles <= 0 ? 'text-danger small fw-bold' : 'text-muted small';
         infoCabana.style.display = 'block';
 
+        // Alerta género
         if (sexoActual && generoCabana && sexoActual !== generoCabana) {
             alertaGenero.style.display = 'block';
         } else {
             alertaGenero.style.display = 'none';
         }
+
+        // Re-validar rango al cambiar cabaña
+        validarRangoEdad();
+    }
+
+    function validarRangoEdad() {
+        if (!campoEdad || !bloqueRango) return;
+
+        const cabanaId = cabanaSelect ? cabanaSelect.value : '';
+        const edad     = parseInt(campoEdad.value) || 0;
+
+        if (!cabanaId || !edad) {
+            bloqueRango.style.display = 'none';
+            return;
+        }
+
+        const rango = rangosEdad[cabanaId] || null;
+
+        if (!rango) {
+            bloqueRango.style.display = 'none';
+            return;
+        }
+
+        const fueraDeRango = (rango.min !== null && edad < rango.min) ||
+                             (rango.max !== null && edad > rango.max);
+
+        if (fueraDeRango) {
+            const minTxt = rango.min !== null ? rango.min : '—';
+            const maxTxt = rango.max !== null ? rango.max : '—';
+            textoRango.textContent =
+                `⚠️ La edad (${edad} años) está fuera del rango de esta cabaña: ` +
+                `${minTxt}–${maxTxt} años.`;
+            bloqueRango.style.display = 'block';
+        } else {
+            bloqueRango.style.display = 'none';
+            if (chkAuto) chkAuto.checked = false;
+        }
     }
 
     cabanaSelect.addEventListener('change', actualizarInfoCabana);
     sexoSelect.addEventListener('change', actualizarInfoCabana);
+    if (campoEdad) campoEdad.addEventListener('input', validarRangoEdad);
 
-    // Ejecutar al cargar
+    // Ejecutar al cargar con los valores actuales del acampante
     if (cabanaSelect.value) actualizarInfoCabana();
+    validarRangoEdad();
 });
 </script>
 
