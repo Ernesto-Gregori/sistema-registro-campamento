@@ -111,46 +111,6 @@ if ($action === 'toggle' && $id) {
     } catch (Exception $e) {  
         $error = "Error al cambiar estado: " . $e->getMessage();  
     }  
-} 
-
-// ── Guardar rango de edad ──────────────────────────────────────
-if ($action === 'save_rango' && $id && $_POST) {
-    try {
-        $semana_id_r  = (int)$_POST['semana_id'];
-        $edad_min     = (int)$_POST['edad_min'];
-        $edad_max     = (int)$_POST['edad_max'];
-        $descripcion  = limpiarDatos($_POST['descripcion'] ?? '');
-
-        if ($edad_min < 0 || $edad_max < $edad_min)
-            throw new Exception("Rango de edad inválido");
-
-        $stmt = $pdo->prepare("INSERT INTO cabana_rangos_edad
-                               (cabana_id, semana_id, edad_min, edad_max, descripcion)
-                               VALUES (?, ?, ?, ?, ?)
-                               ON DUPLICATE KEY UPDATE
-                                   edad_min    = VALUES(edad_min),
-                                   edad_max    = VALUES(edad_max),
-                                   descripcion = VALUES(descripcion)");
-        $stmt->execute([$id, $semana_id_r, $edad_min, $edad_max, $descripcion]);
-
-        header("Location: cabanas.php?message=" . urlencode("Rango de edad guardado") . "&action=rangos&id=$id");
-        exit();
-    } catch (Exception $e) {
-        $error = "Error: " . $e->getMessage();
-    }
-}
-
-// ── Eliminar rango de edad ─────────────────────────────────────
-if ($action === 'delete_rango' && $id) {
-    try {
-        $stmt = $pdo->prepare("DELETE FROM cabana_rangos_edad WHERE id = ?");
-        $stmt->execute([$id]);
-        $cabana_id_back = $_GET['cabana_id'] ?? null;
-        header("Location: cabanas.php?message=" . urlencode("Rango eliminado") . "&action=rangos&id=$cabana_id_back");
-        exit();
-    } catch (Exception $e) {
-        $error = "Error: " . $e->getMessage();
-    }
 }
   
 // ── Datos para editar ──────────────────────────────────────────
@@ -223,27 +183,6 @@ if ($action === 'list') {
 }
 // ── Config de equipos — siempre disponible ────────────────────
 $equipos_config = obtenerEquipos($pdo);
-
-// ── Vista rangos de edad ───────────────────────────────────────
-$cabana_rangos    = null;
-$rangos_existentes = [];
-$semanas_todas    = [];
-if ($action === 'rangos' && $id) {
-    $stmt = $pdo->prepare("SELECT * FROM cabanas WHERE id = ?");
-    $stmt->execute([$id]);
-    $cabana_rangos = $stmt->fetch();
-
-    $stmt = $pdo->query("SELECT * FROM semanas_campamento ORDER BY fecha_inicio DESC");
-    $semanas_todas = $stmt->fetchAll();
-
-    $stmt = $pdo->prepare("SELECT r.*, s.nombre as semana_nombre, s.activa as semana_activa
-                           FROM cabana_rangos_edad r
-                           JOIN semanas_campamento s ON r.semana_id = s.id
-                           WHERE r.cabana_id = ?
-                           ORDER BY s.fecha_inicio DESC");
-    $stmt->execute([$id]);
-    $rangos_existentes = $stmt->fetchAll();
-}
 
 if (isset($_GET['message'])) $message = $_GET['message'];  
   
@@ -564,10 +503,6 @@ include '../includes/header.php';
                                class="btn btn-sm btn-outline-primary" title="Editar cabaña">
                                 <i class="fas fa-edit"></i>
                             </a>
-                            <a href="cabanas.php?action=rangos&id=<?php echo $cab['id']; ?>"
-                               class="btn btn-sm btn-outline-success" title="Rangos de edad">
-                                <i class="fas fa-child"></i> Edades
-                            </a>
                             <a href="cabanas.php?action=toggle&id=<?php echo $cab['id']; ?>"
                                class="btn btn-sm btn-outline-<?php echo $cab['activa']?'warning':'success'; ?>"
                                title="<?php echo $cab['activa']?'Desactivar':'Activar'; ?>"
@@ -686,13 +621,6 @@ include '../includes/header.php';
                         por semana (con capitán/a, principal y asistente).
                     </div>
 
-                    <div class="alert alert-warning small mb-3">
-                        <i class="fas fa-child"></i>
-                        <strong>Rangos de edad:</strong> Puedes configurar qué edades
-                        corresponden a esta cabaña por semana después de guardar, desde
-                        el botón <strong>Rangos de Edad</strong> en la lista.
-                    </div>
-
                     <?php if ($action === 'edit' && $cabana): ?>
                     <div class="card bg-light border-0">
                         <div class="card-body py-2">
@@ -721,207 +649,9 @@ include '../includes/header.php';
             </div>  
         </form>  
     </div>  
-</div>  
-  
-<?php elseif ($action === 'rangos' && $cabana_rangos): ?>
-
-<!-- ══ GESTIÓN DE RANGOS DE EDAD ══ -->
-<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-    <div>
-        <h4 class="mb-0">
-            <i class="fas fa-child"></i>
-            Rangos de Edad —
-            <span class="text-primary"><?php echo htmlspecialchars($cabana_rangos['nombre_cabana']); ?></span>
-        </h4>
-        <small class="text-muted">
-            <span class="badge bg-<?php echo $cabana_rangos['genero']==='masculino'?'primary':'danger'; ?>">
-                <i class="fas fa-<?php echo $cabana_rangos['genero']==='masculino'?'mars':'venus'; ?>"></i>
-                <?php echo ucfirst($cabana_rangos['genero']); ?>
-            </span>
-            · Cap. <?php echo $cabana_rangos['capacidad_maxima']; ?> acampantes
-        </small>
-    </div>
-    <a href="cabanas.php" class="btn btn-secondary">
-        <i class="fas fa-arrow-left"></i> Volver a Cabañas
-    </a>
 </div>
 
-<div class="row g-4">
-
-    <!-- Formulario nuevo rango -->
-    <div class="col-md-5">
-        <div class="card border-success">
-            <div class="card-header bg-success text-white">
-                <h6 class="mb-0">
-                    <i class="fas fa-plus"></i> Asignar Rango de Edad por Semana
-                </h6>
-            </div>
-            <div class="card-body">
-                <form method="POST"
-                      action="cabanas.php?action=save_rango&id=<?php echo $cabana_rangos['id']; ?>">
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Semana de Campamento *</label>
-                        <select class="form-select" name="semana_id" required>
-                            <option value="">-- Seleccionar semana --</option>
-                            <?php foreach ($semanas_todas as $sem):
-                                // Verificar si ya tiene rango
-                                $yaAsignada = false;
-                                foreach ($rangos_existentes as $re) {
-                                    if ($re['semana_id'] == $sem['id']) { $yaAsignada = true; break; }
-                                }
-                            ?>
-                            <option value="<?php echo $sem['id']; ?>">
-                                <?php echo htmlspecialchars($sem['nombre']); ?>
-                                (<?php echo date('d/m/Y', strtotime($sem['fecha_inicio'])); ?>)
-                                <?php echo $sem['activa'] ? '✓ ACTIVA' : ''; ?>
-                                <?php echo $yaAsignada ? '— ⚙️ editar' : ''; ?>
-                            </option>
-                            <?php endforeach; ?>
-                        </select>
-                        <small class="text-muted">
-                            Si la semana ya tiene rango, se actualizará automáticamente.
-                        </small>
-                    </div>
-
-                    <div class="row g-2 mb-3">
-                        <div class="col-6">
-                            <label class="form-label fw-bold">Edad Mínima *</label>
-                            <div class="input-group">
-                                <input type="number" class="form-control" name="edad_min"
-                                       min="0" max="99" required placeholder="Ej: 12">
-                                <span class="input-group-text">años</span>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label fw-bold">Edad Máxima *</label>
-                            <div class="input-group">
-                                <input type="number" class="form-control" name="edad_max"
-                                       min="0" max="99" required placeholder="Ej: 15">
-                                <span class="input-group-text">años</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Descripción <small class="text-muted">(opcional)</small></label>
-                        <input type="text" class="form-control" name="descripcion"
-                               placeholder="Ej: Adolescentes intermedios"
-                               maxlength="100">
-                    </div>
-
-                    <div class="d-grid">
-                        <button type="submit" class="btn btn-success">
-                            <i class="fas fa-save"></i> Guardar Rango
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <!-- Info -->
-        <div class="card mt-3 border-info">
-            <div class="card-body small">
-                <h6><i class="fas fa-info-circle text-info"></i> ¿Para qué sirven los rangos?</h6>
-                <ul class="mb-0 ps-3">
-                    <li>Permite saber qué edades corresponden a esta cabaña</li>
-                    <li>El registro de acampantes puede validar que la edad corresponda</li>
-                    <li>Puedes tener rangos diferentes para cada semana del campamento</li>
-                    <li>Ejemplo: Cabaña Galilea → 12-15 años en Semana 1</li>
-                </ul>
-            </div>
-        </div>
-    </div>
-
-    <!-- Rangos existentes -->
-    <div class="col-md-7">
-        <div class="card">
-            <div class="card-header">
-                <h6 class="mb-0">
-                    <i class="fas fa-list"></i> Rangos Configurados
-                    <span class="badge bg-primary ms-1"><?php echo count($rangos_existentes); ?></span>
-                </h6>
-            </div>
-            <div class="card-body">
-                <?php if (empty($rangos_existentes)): ?>
-                <div class="text-center text-muted py-5">
-                    <i class="fas fa-child fa-3x mb-3 opacity-25 d-block"></i>
-                    No hay rangos de edad configurados aún.
-                    <br>
-                    <small>Usa el formulario de la izquierda para agregar uno.</small>
-                </div>
-                <?php else: ?>
-                <div class="row g-3">
-                    <?php foreach ($rangos_existentes as $rango): ?>
-                    <div class="col-md-6">
-                        <div class="card border-<?php echo $rango['semana_activa'] ? 'success' : 'secondary'; ?> h-100">
-                            <div class="card-header py-2 d-flex justify-content-between align-items-center
-                                        <?php echo $rango['semana_activa'] ? 'bg-success text-white' : 'bg-light'; ?>">
-                                <small class="fw-bold">
-                                    <i class="fas fa-calendar-week"></i>
-                                    <?php echo htmlspecialchars($rango['semana_nombre']); ?>
-                                </small>
-                                <?php if ($rango['semana_activa']): ?>
-                                <span class="badge bg-white text-success" style="font-size:9px;">ACTIVA</span>
-                                <?php endif; ?>
-                            </div>
-                            <div class="card-body text-center py-3">
-                                <!-- Rango visual -->
-                                <div class="d-flex align-items-center justify-content-center gap-3 mb-2">
-                                    <div>
-                                        <div class="display-6 fw-bold text-primary lh-1">
-                                            <?php echo $rango['edad_min']; ?>
-                                        </div>
-                                        <small class="text-muted">mín.</small>
-                                    </div>
-                                    <div class="text-muted">
-                                        <i class="fas fa-arrows-alt-h fa-lg"></i>
-                                    </div>
-                                    <div>
-                                        <div class="display-6 fw-bold text-danger lh-1">
-                                            <?php echo $rango['edad_max']; ?>
-                                        </div>
-                                        <small class="text-muted">máx.</small>
-                                    </div>
-                                </div>
-                                <div class="badge bg-primary mb-2" style="font-size:13px;">
-                                    <?php echo $rango['edad_min']; ?>–<?php echo $rango['edad_max']; ?> años
-                                </div>
-                                <?php if (!empty($rango['descripcion'])): ?>
-                                <div class="text-muted small">
-                                    <?php echo htmlspecialchars($rango['descripcion']); ?>
-                                </div>
-                                <?php endif; ?>
-                            </div>
-                            <div class="card-footer py-2 d-flex justify-content-between">
-                                <!-- Botón editar (pre-rellena el form) -->
-                                <button type="button" class="btn btn-sm btn-outline-primary"
-                                        onclick="editarRango(
-                                            <?php echo $rango['semana_id']; ?>,
-                                            <?php echo $rango['edad_min']; ?>,
-                                            <?php echo $rango['edad_max']; ?>,
-                                            '<?php echo htmlspecialchars($rango['descripcion'] ?? '', ENT_QUOTES); ?>'
-                                        )">
-                                    <i class="fas fa-edit"></i> Editar
-                                </button>
-                                <a href="cabanas.php?action=delete_rango&id=<?php echo $rango['id']; ?>&cabana_id=<?php echo $cabana_rangos['id']; ?>"
-                                   class="btn btn-sm btn-outline-danger"
-                                   onclick="return confirm('¿Eliminar este rango de edad?')">
-                                    <i class="fas fa-trash"></i>
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                    <?php endforeach; ?>
-                </div>
-                <?php endif; ?>
-            </div>
-        </div>
-    </div>
-</div>
-
-<?php endif; // fin rangos ?> 
-
+<?php endif; ?>
   
 <script>
 document.getElementById('togglePassword')?.addEventListener('click', function () {
@@ -942,31 +672,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (formCabana) {
         setTimeout(activarProteccionFormulario, 300);
     }
-
-    // Para el formulario de rangos de edad (save_rango)
-    const formRango = document.querySelector('form[action*="save_rango"]');
-    if (formRango) {
-        setTimeout(activarProteccionFormulario, 300);
-    }
 });
-
-// Pre-rellenar formulario de rango para editar
-function editarRango(semanaId, edadMin, edadMax, descripcion) {
-    const form = document.querySelector('form[action*="save_rango"]');
-    if (!form) return;
-
-    form.querySelector('[name="semana_id"]').value  = semanaId;
-    form.querySelector('[name="edad_min"]').value   = edadMin;
-    form.querySelector('[name="edad_max"]').value   = edadMax;
-    form.querySelector('[name="descripcion"]').value = descripcion;
-
-    // Scroll al formulario
-    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-    // Resaltar
-    form.closest('.card').classList.add('border-warning');
-    setTimeout(() => form.closest('.card').classList.remove('border-warning'), 2000);
-}
 </script>
   
 <?php include '../includes/footer.php'; ?>

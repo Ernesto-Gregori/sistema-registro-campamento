@@ -30,6 +30,8 @@ if ($_POST) {
                     header('Location: admin/dashboard.php');
                 } elseif ($usuario['rol'] === 'encargado_consejeros') {
                     header('Location: encargado_consejeros/dashboard.php');
+                } elseif ($usuario['rol'] === 'administracion') {
+                    header('Location: administracion/dashboard.php');
                 } elseif ($usuario['rol'] === 'consejero') {
                     header('Location: consejero/dashboard.php');
                 } elseif ($usuario['rol'] === 'apoyo') {

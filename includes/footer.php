@@ -75,7 +75,7 @@
     <!-- ══ FIN FOOTER ══ -->
 
     <!-- JS personalizado -->
-    <script src="../assets/js/script.js"></script>
+    <script src="/assets/js/script.js"></script>
 
     <script>
     // ── Marcar nav-link activo automáticamente ──────────────────

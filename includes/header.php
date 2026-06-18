@@ -17,7 +17,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="/assets/vendor/fontawesome/css/all.min.css">
-    <!-- CSS personalizado WOL -->
+    <!-- CSS personalizado -->
     <link href="/assets/css/style.css" rel="stylesheet">
     <link href="/assets/css/header.css" rel="stylesheet">
     <!-- PWA -->
@@ -46,42 +46,58 @@ $_semana_nav = null;
 try {
     global $pdo;
     if (isset($pdo)) {
-        $_stmt_nav  = $pdo->query("SELECT nombre FROM semanas_campamento WHERE activa = 1 LIMIT 1");
+        $_stmt_nav   = $pdo->query("SELECT nombre FROM semanas_campamento WHERE activa = 1 LIMIT 1");
         $_semana_nav = $_stmt_nav->fetch()['nombre'] ?? null;
     }
 } catch (Exception $_e) { /* silencioso */ }
 
-// ── Rol actual ──────────────────────────────────────────────
-$_esAdmin      = esAdministrador();
-$_esEncargado  = esEncargadoConsejeros();
-$_esConsejero  = esConsejero();
-$_esApoyo      = esApoyo();
-$_esAdmisiones = esAdmisiones();
+// ── Roles actuales ──────────────────────────────────────────
+$_esAdmin           = esAdministrador();
+$_esEncargado       = esEncargadoConsejeros();
+$_esConsejero       = esConsejero();
+$_esApoyo           = esApoyo();
+$_esAdmisiones      = esAdmisiones();
+$_esAdministracion  = esAdministracion();   // ← NUEVO
 
-$_rolLabel = $_esAdmin      ? 'Administrador' :
-            ($_esEncargado  ? 'Encargado'     :
-            ($_esConsejero  ? 'Consejero'     :
-            ($_esAdmisiones ? 'Admisiones'    : 'Apoyo')));
+// ── Label y badge según rol ─────────────────────────────────
+$_rolLabel =
+    $_esAdmin          ? 'Administrador'  :
+   ($_esEncargado      ? 'Encargado'      :
+   ($_esConsejero      ? 'Consejero'      :
+   ($_esAdmisiones     ? 'Inscripción'    :   // renombrado para claridad
+   ($_esAdministracion ? 'Administración' :
+                         'Apoyo'))));
 
-$_rolBadgeClass = $_esAdmin      ? 'rol-badge-admin'      :
-                 ($_esEncargado  ? 'rol-badge-encargado'  :
-                 ($_esConsejero  ? 'rol-badge-consejero'  :
-                 ($_esAdmisiones ? 'rol-badge-admisiones' : 'rol-badge-apoyo')));
+$_rolBadgeClass =
+    $_esAdmin          ? 'rol-badge-admin'          :
+   ($_esEncargado      ? 'rol-badge-encargado'      :
+   ($_esConsejero      ? 'rol-badge-consejero'      :
+   ($_esAdmisiones     ? 'rol-badge-admisiones'     :
+   ($_esAdministracion ? 'rol-badge-administracion' :
+                         'rol-badge-apoyo'))));
+
+// ── Dashboard home según rol ────────────────────────────────
+$_dashboardHome =
+    $_esAdmin          ? '/admin/dashboard.php'          :
+   ($_esEncargado      ? '/encargado_consejeros/dashboard.php' :
+   ($_esConsejero      ? '/consejero/dashboard.php'      :
+   ($_esAdmisiones     ? '/admisiones/dashboard.php'     :
+   ($_esAdministracion ? '/administracion/dashboard.php' :
+                         '/apoyo/dashboard.php'))));
 ?>
 
 <!-- ══ NAVBAR ══════════════════════════════════════════════ -->
 <nav class="navbar navbar-expand-lg navbar-custom">
     <div class="container">
 
-        <!-- Brand -->
+        <!-- Brand — siempre apunta al dashboard del rol actual -->
         <?php
-        // Verificar si hay logo subido
         $_logo_path  = '/assets/img/logo_sistema.png';
         $_logo_disco = $_SERVER['DOCUMENT_ROOT'] . $_logo_path;
         $_tiene_logo = file_exists($_logo_disco);
         ?>
-        
-        <a class="navbar-brand d-flex align-items-center gap-2" href="dashboard.php">
+        <a class="navbar-brand d-flex align-items-center gap-2"
+           href="<?php echo $_dashboardHome; ?>">
             <?php if ($_tiene_logo): ?>
                 <img src="<?php echo $_logo_path; ?>?v=<?php echo filemtime($_logo_disco); ?>"
                      alt="Logo"
@@ -92,7 +108,7 @@ $_rolBadgeClass = $_esAdmin      ? 'rol-badge-admin'      :
                 </span>
                 <?php echo htmlspecialchars($_nombre_sistema); ?>
             <?php endif; ?>
-        
+
             <?php if ($_semana_nav): ?>
             <span class="semana-pill">
                 <i class="fas fa-broadcast-tower"></i>
@@ -112,10 +128,12 @@ $_rolBadgeClass = $_esAdmin      ? 'rol-badge-admin'      :
 
             <!-- ══ LINKS SEGÚN ROL ══ -->
             <ul class="navbar-nav me-auto align-items-lg-stretch">
+
                 <?php if ($_esAdmin): ?>
-                <!-- ── ADMINISTRADOR ── -->
+                <!-- ── ADMINISTRADOR ─────────────────────────────── -->
                 <li class="nav-item">
-                    <a class="nav-link<?php echo navActivo('dashboard.php'); ?>" href="dashboard.php">
+                    <a class="nav-link<?php echo navActivo('dashboard.php'); ?>"
+                       href="/admin/dashboard.php">
                         <i class="fas fa-tachometer-alt"></i> Dashboard
                     </a>
                 </li>
@@ -127,12 +145,12 @@ $_rolBadgeClass = $_esAdmin      ? 'rol-badge-admin'      :
                     </a>
                     <ul class="dropdown-menu">
                         <li>
-                            <a class="dropdown-item" href="gestionar_usuarios.php">
+                            <a class="dropdown-item" href="/admin/gestionar_usuarios.php">
                                 <i class="fas fa-users"></i> Gestionar Usuarios
                             </a>
                         </li>
                         <li>
-                            <a class="dropdown-item" href="gestionar_contrasenas.php">
+                            <a class="dropdown-item" href="/admin/gestionar_contrasenas.php">
                                 <i class="fas fa-key"></i> Contraseñas
                             </a>
                         </li>
@@ -146,18 +164,18 @@ $_rolBadgeClass = $_esAdmin      ? 'rol-badge-admin'      :
                     </a>
                     <ul class="dropdown-menu">
                         <li>
-                            <a class="dropdown-item" href="reporte_anual.php">
+                            <a class="dropdown-item" href="/admin/reporte_anual.php">
                                 <i class="fas fa-calendar-alt"></i> Reporte Anual
                             </a>
                         </li>
                         <li>
-                            <a class="dropdown-item" href="reporte_mensual.php">
+                            <a class="dropdown-item" href="/admin/reporte_mensual.php">
                                 <i class="fas fa-calendar-week"></i> Reporte Mensual
                             </a>
                         </li>
                         <li><hr class="dropdown-divider"></li>
                         <li>
-                            <a class="dropdown-item" href="logs.php">
+                            <a class="dropdown-item" href="/admin/logs.php">
                                 <i class="fas fa-file-alt"></i> Logs del Sistema
                             </a>
                         </li>
@@ -171,27 +189,28 @@ $_rolBadgeClass = $_esAdmin      ? 'rol-badge-admin'      :
                     </a>
                     <ul class="dropdown-menu">
                         <li>
-                            <a class="dropdown-item" href="configuracion.php">
+                            <a class="dropdown-item" href="/admin/configuracion.php">
                                 <i class="fas fa-sliders-h"></i> Configuración Global
                             </a>
                         </li>
                         <li>
-                            <a class="dropdown-item" href="backups.php">
+                            <a class="dropdown-item" href="/admin/backups.php">
                                 <i class="fas fa-database"></i> Gestor de Backups
                             </a>
                         </li>
                         <li>
-                            <a class="dropdown-item" href="mantenimiento.php">
+                            <a class="dropdown-item" href="/admin/mantenimiento.php">
                                 <i class="fas fa-tools"></i> Mantenimiento
                             </a>
                         </li>
                     </ul>
                 </li>
-            
+
                 <?php elseif ($_esEncargado): ?>
-                <!-- ── ENCARGADO CONSEJERO ── -->
+                <!-- ── ENCARGADO CONSEJEROS ──────────────────────── -->
                 <li class="nav-item">
-                    <a class="nav-link<?php echo navActivo('dashboard.php'); ?>" href="dashboard.php">
+                    <a class="nav-link<?php echo navActivo('dashboard.php'); ?>"
+                       href="/encargado_consejeros/dashboard.php">
                         <i class="fas fa-tachometer-alt"></i> Dashboard
                     </a>
                 </li>
@@ -203,17 +222,17 @@ $_rolBadgeClass = $_esAdmin      ? 'rol-badge-admin'      :
                     </a>
                     <ul class="dropdown-menu">
                         <li>
-                            <a class="dropdown-item" href="acampantes.php">
+                            <a class="dropdown-item" href="/encargado_consejeros/acampantes.php">
                                 <i class="fas fa-list"></i> Lista de Acampantes
                             </a>
                         </li>
                         <li>
-                            <a class="dropdown-item" href="acampantes.php?action=add">
+                            <a class="dropdown-item" href="/encargado_consejeros/acampantes.php?action=add">
                                 <i class="fas fa-user-plus"></i> Nuevo Acampante
                             </a>
                         </li>
                         <li>
-                            <a class="dropdown-item" href="importar_acampantes.php">
+                            <a class="dropdown-item" href="/encargado_consejeros/importar_acampantes.php">
                                 <i class="fas fa-file-upload"></i> Importar Masivo
                             </a>
                         </li>
@@ -227,125 +246,193 @@ $_rolBadgeClass = $_esAdmin      ? 'rol-badge-admin'      :
                     </a>
                     <ul class="dropdown-menu">
                         <li>
-                            <a class="dropdown-item" href="semanas.php">
+                            <a class="dropdown-item" href="/encargado_consejeros/semanas.php">
                                 <i class="fas fa-calendar-week"></i> Semanas
                             </a>
                         </li>
                         <li>
-                            <a class="dropdown-item" href="cabanas.php">
+                            <a class="dropdown-item" href="/encargado_consejeros/cabanas.php">
                                 <i class="fas fa-home"></i> Cabañas
                             </a>
                         </li>
                         <li>
-                            <a class="dropdown-item" href="consejeros_semana.php">
+                            <a class="dropdown-item" href="/encargado_consejeros/consejeros_semana.php">
                                 <i class="fas fa-users-cog"></i> Asignar Consejeros
                             </a>
                         </li>
                         <li>
-                            <a class="dropdown-item" href="equipos.php">
+                            <a class="dropdown-item" href="/encargado_consejeros/equipos.php">
                                 <i class="fas fa-palette"></i> Equipos
                             </a>
                         </li>
                     </ul>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link<?php echo navActivo('recursos.php'); ?>" href="recursos.php">
+                    <a class="nav-link<?php echo navActivo('recursos.php'); ?>"
+                       href="/encargado_consejeros/recursos.php">
                         <i class="fas fa-folder-open"></i> Recursos
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link<?php echo navActivo('reportes.php'); ?>" href="reportes.php">
+                    <a class="nav-link<?php echo navActivo('reportes.php'); ?>"
+                       href="/encargado_consejeros/reportes.php">
                         <i class="fas fa-chart-bar"></i> Reportes
                     </a>
                 </li>
-            
+
                 <?php elseif ($_esAdmisiones): ?>
-                <!-- ── ADMISIONES ── -->
+                <!-- ── INSCRIPCIÓN (antes Admisiones) ────────────── -->
                 <li class="nav-item">
-                    <a class="nav-link<?php echo navActivo('dashboard.php'); ?>" href="dashboard.php">
+                    <a class="nav-link<?php echo navActivo('dashboard.php'); ?>"
+                       href="/admisiones/dashboard.php">
                         <i class="fas fa-tachometer-alt"></i> Dashboard
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link<?php echo navActivo('lista_acampantes.php'); ?>" href="lista_acampantes.php">
+                    <a class="nav-link<?php echo navActivo('lista_acampantes.php'); ?>"
+                       href="/admisiones/lista_acampantes.php">
                         <i class="fas fa-users"></i> Acampantes
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link<?php echo navActivo('inscribir.php'); ?>" href="inscribir.php">
+                    <a class="nav-link<?php echo navActivo('lista_grupos.php'); ?>"
+                       href="/admisiones/grupos/lista_grupos.php">
+                        <i class="fas fa-users-cog"></i> Grupos
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link<?php echo navActivo('inscribir.php'); ?>"
+                       href="/admisiones/inscribir.php">
                         <i class="fas fa-user-plus"></i> Inscribir
                     </a>
                 </li>
+                <!-- Pagos eliminado de Inscripción — ahora es de Administración -->
                 <li class="nav-item">
-                    <a class="nav-link<?php echo navActivo('lista_acampantes.php'); ?>" 
-                       href="lista_acampantes.php?filtro_pago=sin_pago">
-                        <i class="fas fa-dollar-sign"></i> Pagos
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link<?php echo navActivo('semanas.php'); ?>" href="semanas.php">
-                        <i class="fas fa-calendar-alt"></i> Semanas
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link<?php echo navActivo('estadisticas.php'); ?>" href="estadisticas.php">
+                    <a class="nav-link<?php echo navActivo('estadisticas.php'); ?>"
+                       href="/admisiones/estadisticas.php">
                         <i class="fas fa-chart-bar"></i> Estadísticas
                     </a>
                 </li>
-            
-                <?php elseif ($_esConsejero): ?>
-                <!-- ── CONSEJERO ── -->
+
+                <?php elseif ($_esAdministracion): ?>
+                <!-- ── ADMINISTRACIÓN (caja / pagos) ─────────────────────────── -->
                 <li class="nav-item">
-                    <a class="nav-link<?php echo navActivo('dashboard.php'); ?>" href="dashboard.php">
+                    <a class="nav-link<?php echo navActivo('dashboard.php'); ?>"
+                       href="/administracion/dashboard.php">
                         <i class="fas fa-tachometer-alt"></i> Dashboard
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link<?php echo navActivo('mis_acampantes.php'); ?>" href="mis_acampantes.php">
+                    <a class="nav-link<?php echo navActivo('lista_pagos.php'); ?>"
+                       href="/administracion/lista_pagos.php">
+                        <i class="fas fa-cash-register"></i> Caja
+                    </a>
+                </li>
+                
+                <!-- ── NUEVO: Grupos ── -->
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle<?php echo in_array($paginaActual,
+                        ['lista_grupos_admin.php', 'ver_grupo_admin.php']) ? ' active' : ''; ?>"
+                       href="#" role="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-users"></i> Grupos
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li>
+                            <a class="dropdown-item" href="/administracion/lista_grupos_admin.php">
+                                <i class="fas fa-list"></i> Todos los grupos
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item"
+                               href="/administracion/lista_grupos_admin.php?filtro=pendiente">
+                                <i class="fas fa-exclamation-circle text-warning"></i> Con saldo pendiente
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item"
+                               href="/administracion/lista_grupos_admin.php?filtro=completo">
+                                <i class="fas fa-check-circle text-success"></i> Pagados completos
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <li class="nav-item">
+                    <a class="nav-link<?php echo navActivo('historial.php'); ?>"
+                       href="/administracion/historial.php">
+                        <i class="fas fa-history"></i> Historial
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link<?php echo navActivo('estadisticas.php'); ?>"
+                       href="/administracion/estadisticas.php">
+                        <i class="fas fa-chart-bar"></i> Estadísticas
+                    </a>
+                </li>
+
+                <?php elseif ($_esConsejero): ?>
+                <!-- ── CONSEJERO ─────────────────────────────────── -->
+                <li class="nav-item">
+                    <a class="nav-link<?php echo navActivo('dashboard.php'); ?>"
+                       href="/consejero/dashboard.php">
+                        <i class="fas fa-tachometer-alt"></i> Dashboard
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link<?php echo navActivo('mis_acampantes.php'); ?>"
+                       href="/consejero/mis_acampantes.php">
                         <i class="fas fa-users"></i> Mis Acampantes
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link<?php echo navActivo('subir_foto.php'); ?>" href="../consejero/subir_foto.php">
+                    <a class="nav-link<?php echo navActivo('subir_foto.php'); ?>"
+                       href="/consejero/subir_foto.php">
                         <i class="fas fa-camera"></i> Fotos
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link<?php echo navActivo('estadisticas.php'); ?>" href="estadisticas.php">
+                    <a class="nav-link<?php echo navActivo('estadisticas.php'); ?>"
+                       href="/consejero/estadisticas.php">
                         <i class="fas fa-chart-pie"></i> Estadísticas
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link<?php echo navActivo('recursos.php'); ?>" href="recursos.php">
+                    <a class="nav-link<?php echo navActivo('recursos.php'); ?>"
+                       href="/consejero/recursos.php">
                         <i class="fas fa-folder-open"></i> Recursos
                     </a>
                 </li>
-            
+
                 <?php elseif ($_esApoyo): ?>
-                <!-- ── APOYO ── -->
+                <!-- ── APOYO ─────────────────────────────────────── -->
                 <li class="nav-item">
-                    <a class="nav-link<?php echo navActivo('dashboard.php'); ?>" href="dashboard.php">
+                    <a class="nav-link<?php echo navActivo('dashboard.php'); ?>"
+                       href="/apoyo/dashboard.php">
                         <i class="fas fa-tachometer-alt"></i> Dashboard
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link<?php echo navActivo('registrar_acampante.php'); ?>" href="registrar_acampante.php">
+                    <a class="nav-link<?php echo navActivo('registrar_acampante.php'); ?>"
+                       href="/apoyo/registrar_acampante.php">
                         <i class="fas fa-user-plus"></i> Registro
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link<?php echo navActivo('lista_acampantes.php'); ?>" href="lista_acampantes.php">
+                    <a class="nav-link<?php echo navActivo('lista_acampantes.php'); ?>"
+                       href="/apoyo/lista_acampantes.php">
                         <i class="fas fa-users"></i> Acampantes
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link<?php echo navActivo('estadisticas.php'); ?>" href="estadisticas.php">
+                    <a class="nav-link<?php echo navActivo('estadisticas.php'); ?>"
+                       href="/apoyo/estadisticas.php">
                         <i class="fas fa-chart-pie"></i> Estadísticas
                     </a>
                 </li>
-            
+
                 <?php endif; ?>
             </ul>
+            <!-- ── FIN LINKS ── -->
 
             <!-- ══ USUARIO DROPDOWN ══ -->
             <ul class="navbar-nav align-items-lg-center">
@@ -370,43 +457,57 @@ $_rolBadgeClass = $_esAdmin      ? 'rol-badge-admin'      :
                             </span>
                         </li>
                         <li><hr class="dropdown-divider"></li>
+
                         <?php if ($_esEncargado): ?>
                         <li>
-                            <a class="dropdown-item" href="usuarios.php">
+                            <a class="dropdown-item" href="/encargado_consejeros/usuarios.php">
                                 <i class="fas fa-user-shield"></i> Usuarios de apoyo
                             </a>
                         </li>
                         <li><hr class="dropdown-divider"></li>
                         <?php endif; ?>
+
                         <?php if ($_esAdmisiones): ?>
                         <li>
-                            <a class="dropdown-item" href="importar.php">
-                                <i class="fas fa-file-csv"></i> Importar CSV
+                            <a class="dropdown-item" href="/admisiones/importar.php">
+                                <i class="fas fa-file-csv"></i> Importar CSV/XLSX
                             </a>
                         </li>
                         <li><hr class="dropdown-divider"></li>
                         <?php endif; ?>
+
+                        <?php if ($_esAdministracion): ?>
+                        <li>
+                            <a class="dropdown-item" href="/administracion/historial.php">
+                                <i class="fas fa-history"></i> Historial de pagos
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <?php endif; ?>
+
                         <?php if ($_esAdmin): ?>
                         <li>
-                            <a class="dropdown-item" href="cambiar_password.php">
+                            <a class="dropdown-item" href="/admin/cambiar_password.php">
                                 <i class="fas fa-key"></i> Cambiar Contraseña
                             </a>
                         </li>
                         <li>
-                            <a class="dropdown-item" href="mantenimiento.php">
+                            <a class="dropdown-item" href="/admin/mantenimiento.php">
                                 <i class="fas fa-tools"></i> Mantenimiento
                             </a>
                         </li>
                         <li><hr class="dropdown-divider"></li>
                         <?php endif; ?>
+
                         <li>
-                            <a class="dropdown-item text-danger" href="../logout.php">
+                            <a class="dropdown-item text-danger" href="/logout.php">
                                 <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
                             </a>
                         </li>
                     </ul>
                 </li>
             </ul>
+            <!-- ── FIN USUARIO ── -->
 
         </div><!-- /collapse -->
     </div><!-- /container -->

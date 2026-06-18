@@ -18,13 +18,15 @@ $error = '';
 if ($_POST) {
     try {
         if ($action === 'add' || $action === 'edit') {
-            $nombre = limpiarDatos($_POST['nombre']);
-            $descripcion = limpiarDatos($_POST['descripcion']);
-            $fecha_inicio = $_POST['fecha_inicio'];
-            $fecha_fin = $_POST['fecha_fin'];
-            $tipo_acampante = $_POST['tipo_acampante'];
+            $nombre          = limpiarDatos($_POST['nombre']);
+            $descripcion     = limpiarDatos($_POST['descripcion']);
+            $fecha_inicio    = $_POST['fecha_inicio'];
+            $fecha_fin       = $_POST['fecha_fin'];
+            $tipo_acampante  = $_POST['tipo_acampante'];
             $year_campamento = (int)$_POST['year_campamento'];
-
+            $edad_min        = $_POST['edad_min'] !== '' ? (int)$_POST['edad_min'] : null;
+            $edad_max        = $_POST['edad_max'] !== '' ? (int)$_POST['edad_max'] : null;
+            
             if (empty($nombre)) throw new Exception("El nombre es obligatorio");
             if (empty($fecha_inicio)) throw new Exception("La fecha de inicio es obligatoria");
             if (empty($fecha_fin)) throw new Exception("La fecha de fin es obligatoria");
@@ -32,18 +34,37 @@ if ($_POST) {
             if (!in_array($tipo_acampante, ['mayores', 'ninos', 'adolescentes'])) {
                 throw new Exception("Tipo de acampante inválido");
             }
+            // Validación de edad
+            if ($edad_min !== null && $edad_min < 0)
+                throw new Exception("La edad mínima no puede ser negativa.");
+            if ($edad_max !== null && $edad_max < 0)
+                throw new Exception("La edad máxima no puede ser negativa.");
+            if ($edad_min !== null && $edad_max !== null && $edad_min > $edad_max)
+                throw new Exception("La edad mínima no puede ser mayor que la máxima.");
 
             if ($action === 'add') {
-                $stmt = $pdo->prepare("INSERT INTO semanas_campamento 
-                                      (nombre, descripcion, fecha_inicio, fecha_fin, tipo_acampante, year_campamento, activa) 
-                                      VALUES (?, ?, ?, ?, ?, ?, 0)");
-                $stmt->execute([$nombre, $descripcion, $fecha_inicio, $fecha_fin, $tipo_acampante, $year_campamento]);
+                $stmt = $pdo->prepare("
+                    INSERT INTO semanas_campamento
+                        (nombre, descripcion, fecha_inicio, fecha_fin,
+                         tipo_acampante, year_campamento, activa, edad_min, edad_max)
+                    VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
+                ");
+                $stmt->execute([
+                    $nombre, $descripcion, $fecha_inicio, $fecha_fin,
+                    $tipo_acampante, $year_campamento, $edad_min, $edad_max
+                ]);
                 $message = "Semana creada exitosamente";
             } else {
-                $stmt = $pdo->prepare("UPDATE semanas_campamento 
-                                      SET nombre=?, descripcion=?, fecha_inicio=?, fecha_fin=?, tipo_acampante=?, year_campamento=?
-                                      WHERE id=?");
-                $stmt->execute([$nombre, $descripcion, $fecha_inicio, $fecha_fin, $tipo_acampante, $year_campamento, $id]);
+                $stmt = $pdo->prepare("
+                    UPDATE semanas_campamento
+                    SET nombre=?, descripcion=?, fecha_inicio=?, fecha_fin=?,
+                        tipo_acampante=?, year_campamento=?, edad_min=?, edad_max=?
+                    WHERE id=?
+                ");
+                $stmt->execute([
+                    $nombre, $descripcion, $fecha_inicio, $fecha_fin,
+                    $tipo_acampante, $year_campamento, $edad_min, $edad_max, $id
+                ]);
                 $message = "Semana actualizada exitosamente";
             }
 
@@ -230,24 +251,35 @@ $semana_activa = $stmt_activa->fetch();
                             <strong>Acampantes:</strong>
                             <span class="badge bg-primary"><?php echo $sem['total_acampantes']; ?></span>
                         </p>
+                        
+                        <?php if ($sem['edad_min'] || $sem['edad_max']): ?>
+                        <p class="mb-0 mt-1">
+                            <i class="fas fa-id-badge text-warning"></i>
+                            <strong>Edades:</strong>
+                            <span class="badge bg-warning text-dark">
+                                <?php echo ($sem['edad_min'] ?? '—') . ' a ' . ($sem['edad_max'] ?? '—'); ?> años
+                            </span>
+                        </p>
+                        <?php endif; ?>
                     </div>
                     <div class="card-footer">
                         <div class="btn-group w-100">
-                            <!-- Botón Activar/Desactivar -->
                             <a href="semanas.php?action=toggle&id=<?php echo $sem['id']; ?>"
                                class="btn btn-sm btn-<?php echo $sem['activa'] ? 'warning' : 'success'; ?>"
                                onclick="return confirm('<?php echo $sem['activa'] ? '¿Desactivar esta semana?' : '¿Activar esta semana? Los consejeros verán sus acampantes.'; ?>')">
                                 <i class="fas fa-<?php echo $sem['activa'] ? 'pause' : 'play'; ?>"></i>
                                 <?php echo $sem['activa'] ? 'Desactivar' : 'Activar'; ?>
                             </a>
-                            <!-- Botón Editar -->
                             <a href="semanas.php?action=edit&id=<?php echo $sem['id']; ?>"
-                               class="btn btn-sm btn-outline-primary">
+                               class="btn btn-sm btn-outline-primary" title="Editar semana">
                                 <i class="fas fa-edit"></i>
                             </a>
-                            <!-- Ver Acampantes -->
+                            <a href="cabana_edad_config.php?semana_id=<?php echo $sem['id']; ?>"
+                               class="btn btn-sm btn-outline-warning" title="Límites de edad por cabaña">
+                                <i class="fas fa-id-badge"></i>
+                            </a>
                             <a href="acampantes.php?semana_id=<?php echo $sem['id']; ?>"
-                               class="btn btn-sm btn-outline-info">
+                               class="btn btn-sm btn-outline-info" title="Ver acampantes">
                                 <i class="fas fa-users"></i>
                             </a>
                         </div>
@@ -336,13 +368,100 @@ $semana_activa = $stmt_activa->fetch();
                 </div>
             </div>
 
+             <!-- ── Límites de Edad ────────────────────────────────────────── -->
+            <div class="card mb-3 border-warning">
+                <div class="card-header bg-warning bg-opacity-10">
+                    <h6 class="mb-0">
+                        <i class="fas fa-id-badge text-warning"></i>
+                        Límites de Edad para esta Semana
+                        <small class="text-muted fw-normal ms-2">
+                            Opcional — deja en blanco para no aplicar límite
+                        </small>
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-child text-muted me-1"></i>
+                                Edad mínima
+                            </label>
+                            <div class="input-group">
+                                <input type="number"
+                                       class="form-control"
+                                       name="edad_min"
+                                       min="0" max="99"
+                                       placeholder="Sin límite"
+                                       value="<?php echo $semana['edad_min'] ?? ''; ?>">
+                                <span class="input-group-text">años</span>
+                            </div>
+                            <div class="form-text">
+                                Acampantes menores a esta edad no podrán inscribirse.
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-user text-muted me-1"></i>
+                                Edad máxima
+                            </label>
+                            <div class="input-group">
+                                <input type="number"
+                                       class="form-control"
+                                       name="edad_max"
+                                       min="0" max="99"
+                                       placeholder="Sin límite"
+                                       value="<?php echo $semana['edad_max'] ?? ''; ?>">
+                                <span class="input-group-text">años</span>
+                            </div>
+                            <div class="form-text">
+                                Acampantes mayores a esta edad no podrán inscribirse.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Preview dinámico del rango -->
+                    <div id="previewRango" class="alert alert-info mt-3 mb-0 py-2 small d-none">
+                        <i class="fas fa-info-circle"></i>
+                        Rango configurado:
+                        <strong id="textoRango"></strong>
+                        &nbsp;·&nbsp;
+                        <a href="cabana_edad_config.php?semana_id=<?php echo $semana['id'] ?? ''; ?>"
+                           class="alert-link" id="linkCabanas"
+                           <?php echo $action === 'add' ? 'style="display:none"' : ''; ?>>
+                            <i class="fas fa-home fa-xs"></i>
+                            Configurar por cabaña
+                        </a>
+                    </div>
+
+                    <?php
+                    // Si ya tiene rango guardado (modo editar) mostrar badge
+                    if (!empty($semana['edad_min']) || !empty($semana['edad_max'])): ?>
+                    <div class="mt-2">
+                        <span class="badge bg-success">
+                            <i class="fas fa-check-circle fa-xs"></i>
+                            Rango actual:
+                            <?php echo ($semana['edad_min'] ?? '—') . ' a ' . ($semana['edad_max'] ?? '—'); ?> años
+                        </span>
+                        <?php if ($action === 'edit'): ?>
+                        <a href="cabana_edad_config.php?semana_id=<?php echo $semana['id']; ?>"
+                           class="btn btn-sm btn-outline-warning ms-2">
+                            <i class="fas fa-home"></i>
+                            Configurar límite por cabaña
+                        </a>
+                        <?php endif; ?>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
             <hr>
             <div class="d-flex justify-content-between">
                 <a href="semanas.php" class="btn btn-secondary">
                     <i class="fas fa-arrow-left"></i> Volver
                 </a>
                 <button type="submit" class="btn btn-success">
-                    <i class="fas fa-save"></i> <?php echo $action === 'add' ? 'Crear' : 'Actualizar'; ?> Semana
+                    <i class="fas fa-save"></i>
+                    <?php echo $action === 'add' ? 'Crear' : 'Actualizar'; ?> Semana
                 </button>
             </div>
         </form>
@@ -350,5 +469,38 @@ $semana_activa = $stmt_activa->fetch();
 </div>
 
 <?php endif; ?>
+
+<script>
+const inputMin  = document.querySelector('input[name="edad_min"]');
+const inputMax  = document.querySelector('input[name="edad_max"]');
+const preview   = document.getElementById('previewRango');
+const textoRang = document.getElementById('textoRango');
+
+function actualizarPreview() {
+    const emin = inputMin?.value;
+    const emax = inputMax?.value;
+
+    if (emin !== '' || emax !== '') {
+        const minTxt = emin !== '' ? emin + ' años' : 'sin mínimo';
+        const maxTxt = emax !== '' ? emax + ' años' : 'sin máximo';
+        textoRang.textContent = minTxt + ' — ' + maxTxt;
+        preview.classList.remove('d-none');
+
+        // Validación visual
+        if (emin !== '' && emax !== '' && parseInt(emin) > parseInt(emax)) {
+            preview.className = 'alert alert-danger mt-3 mb-0 py-2 small';
+            textoRang.textContent = '⚠️ La edad mínima no puede superar la máxima';
+        } else {
+            preview.className = 'alert alert-info mt-3 mb-0 py-2 small';
+        }
+    } else {
+        preview.classList.add('d-none');
+    }
+}
+
+inputMin?.addEventListener('input', actualizarPreview);
+inputMax?.addEventListener('input', actualizarPreview);
+actualizarPreview(); // ejecutar al cargar en modo editar
+</script>
 
 <?php include '../includes/footer.php'; ?>

@@ -807,9 +807,11 @@ include '../includes/header.php';
  
 <script>
 window._formHasOwnHandler = true;
+
 // ── Seleccionar consejero responsable ─────────────────────────
 function seleccionarResponsable(nombre) {
-    document.getElementById('consejero_responsable').value = nombre;
+    const campo = document.getElementById('consejero_responsable');
+    if (campo) campo.value = nombre;
 
     document.querySelectorAll('.btn-consejero-resp').forEach(function (btn) {
         if (btn.dataset.nombre === nombre) {
@@ -822,7 +824,7 @@ function seleccionarResponsable(nombre) {
     });
 }
 
-// Función para manejar la lógica de "Recibió a Cristo"
+// ── Lógica espiritual: bloquear "Recibió a Cristo" si ya era creyente ──
 function toggleRecibioCristo() {
     const eraCreyente   = document.getElementById('era_creyente_antes');
     const recibioCristo = document.getElementById('recibio_cristo_semana');
@@ -841,13 +843,19 @@ function toggleRecibioCristo() {
 // ── Un solo DOMContentLoaded para todo ────────────────────────
 document.addEventListener('DOMContentLoaded', function () {
 
-    // Inicializar lógica espiritual
+    // 1. Inicializar estado espiritual (bloqueo de "Recibió a Cristo")
     toggleRecibioCristo();
 
-    const form = document.getElementById('formConsejeria');
-    if (!form) return; // Vista de selección de acampante — nada más que hacer
+    // 2. Inicializar botones de consejero responsable
+    const campoResponsable = document.getElementById('consejero_responsable');
+    if (campoResponsable && campoResponsable.value.trim()) {
+        seleccionarResponsable(campoResponsable.value.trim());
+    }
 
-    // ── Submit unificado — validación + fetch + offline ──
+    const form = document.getElementById('formConsejeria');
+    if (!form) return;
+
+    // ── Submit unificado ──────────────────────────────────────
     form.addEventListener('submit', async function (e) {
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -890,18 +898,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const contentType = fetchResponse.headers.get('content-type') || '';
 
-            // ── Respuesta JSON → puede ser offline o error de API ──
             if (contentType.includes('application/json')) {
                 const data = await fetchResponse.json();
 
                 if (data.offline === true) {
-                    // SW guardó offline → offline-sync.js mostrará el modal
                     console.log('[Form] Guardado offline por SW');
                     if (submitBtn) {
                         submitBtn.disabled = false;
                         submitBtn.innerHTML = '<i class="fas fa-save"></i> Registrar Consejería Completa';
                     }
-                    return; // No redirigir — esperar modal de offline-sync.js
+                    return;
                 }
 
                 if (data.ok === false) {
@@ -909,9 +915,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
 
-            // ── Respuesta HTML exitosa → redirigir ──
             if (fetchResponse.ok || fetchResponse.redirected) {
-                // Limpiar beforeunload antes de navegar
                 if (typeof formChanged !== 'undefined') formChanged = false;
                 if (typeof beforeUnloadHandler !== 'undefined') {
                     window.removeEventListener('beforeunload', beforeUnloadHandler);
@@ -930,16 +934,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 submitBtn.innerHTML = '<i class="fas fa-save"></i> Registrar Consejería Completa';
             }
 
-            // Si no fue error de red (offline), mostrar error
             if (navigator.onLine) {
                 if (typeof OfflineSync !== 'undefined') {
-                    OfflineSync.mostrarToast('❌ Error al guardar. Intenta de nuevo.', 'error');
+                    OfflineSync.mostrarToast('Error al guardar. Intenta de nuevo.', 'error');
                 }
             }
-            // Si es error de red → SW ya envió POST_FAILED_OFFLINE → offline-sync.js muestra modal
         }
-    }, true); // capture phase — intercepta antes que cualquier otro listener
+    }, true);
 
+});
 </script>
 
 <?php include '../includes/footer.php'; ?>

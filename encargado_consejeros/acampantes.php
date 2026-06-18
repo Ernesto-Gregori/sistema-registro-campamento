@@ -135,8 +135,14 @@ if ($_POST) {
             // Capturar autorización de edad
             $edad_autorizada = isset($_POST['edad_autorizada']) ? 1 : 0;
             
-            // ⭐ OBTENER semana_id del formulario
-            $semana_id = !empty($_POST['semana_id']) ? (int)$_POST['semana_id'] : null;
+            // ⭐ OBTENER semana_id: para encargado_consejeros se usa siempre la semana activa
+            if (!empty($_POST['semana_id'])) {
+                $semana_id = (int)$_POST['semana_id'];
+            } else {
+                // Fallback: buscar semana activa directamente
+                $stmt_sid = $pdo->query("SELECT id FROM semanas_campamento WHERE activa = 1 LIMIT 1");
+                $semana_id = (int)($stmt_sid->fetchColumn() ?: 0) ?: null;
+            }
 
             // Validar que el género del acampante coincida con el de la cabaña  
             if ($cabana_id) {  
@@ -434,6 +440,10 @@ try {
 } catch (Exception $e) {
     $rangosEdadJS = [];
 }
+
+$semana_activa = null;
+$stmt_sa = $pdo->query("SELECT * FROM semanas_campamento WHERE activa = 1 LIMIT 1");
+$semana_activa = $stmt_sa->fetch();
 
 include '../includes/header.php';
 ?>  
@@ -911,23 +921,52 @@ include '../includes/header.php';
                     </h6>
         
                     <div class="mb-3">
-                        <label class="form-label">Semana de Campamento *</label>
-                        <select class="form-select" name="semana_id" id="semana_id" required>
-                            <option value="">-- Seleccionar Semana --</option>
-                            <?php
-                            $stmt_sem = $pdo->query("SELECT * FROM semanas_campamento ORDER BY fecha_inicio ASC");
-                            $semanas_lista = $stmt_sem->fetchAll();
-                            foreach ($semanas_lista as $sem):
-                            ?>
-                            <option value="<?php echo $sem['id']; ?>"
-                                <?php echo (isset($acampante['semana_id']) && $acampante['semana_id']==$sem['id']) ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($sem['nombre']); ?>
-                                (<?php echo date('d/m/Y', strtotime($sem['fecha_inicio'])); ?>)
-                                <?php echo $sem['activa'] ? '✓ ACTIVA' : ''; ?>
-                            </option>
-                            <?php endforeach; ?>
-                        </select>
-                        <small class="text-muted">Los acampantes se agrupan por semana</small>
+                        <label class="form-label">Semana de Campamento</label>
+                        <?php
+                        // Para encargado_consejeros: semana fija = semana activa (igual que apoyo)
+                        // En edit, si el acampante ya tiene semana, usarla; si no, usar la activa
+                        $semana_form_id = null;
+                        $semana_form_nombre = '';
+                        $semana_form_fecha = '';
+                    
+                        if ($action === 'edit' && $acampante && !empty($acampante['semana_id'])) {
+                            // Buscar datos de la semana del acampante
+                            $stmt_sem_f = $pdo->prepare("SELECT * FROM semanas_campamento WHERE id = ?");
+                            $stmt_sem_f->execute([$acampante['semana_id']]);
+                            $sem_form = $stmt_sem_f->fetch();
+                            if ($sem_form) {
+                                $semana_form_id     = $sem_form['id'];
+                                $semana_form_nombre = $sem_form['nombre'];
+                                $semana_form_fecha  = date('d/m/Y', strtotime($sem_form['fecha_inicio']));
+                            }
+                        }
+                    
+                        // Si no hay semana del acampante (add, o edit sin semana), usar la activa
+                        if (!$semana_form_id && $semana_activa) {
+                            $semana_form_id     = $semana_activa['id'];
+                            $semana_form_nombre = $semana_activa['nombre'];
+                            $semana_form_fecha  = date('d/m/Y', strtotime($semana_activa['fecha_inicio']));
+                        }
+                    
+                        // También necesitamos $semanas_lista para el badge de semana activa más abajo
+                        $stmt_sem = $pdo->query("SELECT * FROM semanas_campamento ORDER BY fecha_inicio ASC");
+                        $semanas_lista = $stmt_sem->fetchAll();
+                        ?>
+                    
+                        <!-- Campo hidden que envía el semana_id al POST -->
+                        <input type="hidden" name="semana_id" id="semana_id"
+                               value="<?php echo (int)$semana_form_id; ?>">
+                    
+                        <!-- Display informativo (no editable) -->
+                        <div class="form-control bg-light d-flex align-items-center gap-2" style="cursor:default;">
+                            <i class="fas fa-calendar-week text-success"></i>
+                            <span class="fw-bold"><?php echo htmlspecialchars($semana_form_nombre); ?></span>
+                            <span class="text-muted small">(<?php echo $semana_form_fecha; ?>)</span>
+                            <?php if ($semana_activa && $semana_form_id == $semana_activa['id']): ?>
+                            <span class="badge bg-success ms-auto">ACTIVA</span>
+                            <?php endif; ?>
+                        </div>
+                        <small class="text-muted">Semana asignada automáticamente</small>
                     </div>
         
                     <div class="mb-3">
@@ -1453,19 +1492,6 @@ document.addEventListener('DOMContentLoaded', function() {
         actualizarInfoCabana();
     }
 
-    // Guardar nombres originales al cargar
-    Array.from(cabanaSelect.options).forEach((option, index) => {
-        if (option.value) {
-            const capacidad = option.dataset.capacidad;
-            const genero = option.dataset.genero;
-            const ocupadosTotal = option.dataset.ocupadosTotal || 0;
-            const icono = genero === 'masculino' ? '♂' : '♀';
-            // Guardar nombre base sin contadores
-            const textoBase = option.textContent.trim().split('(')[0].trim().split('-')[0].trim();
-            option.dataset.nombreBase = textoBase;
-        }
-    });
-
     // Función principal que actualiza el select de cabañas
     function actualizarSelectCabanas() {
         if (!semanaSelect || !cabanaSelect) return;
@@ -1572,7 +1598,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Ejecutar al cargar si ya hay semana seleccionada
     if (semanaSelect && semanaSelect.value) {
-        actualizarSelectCabanas();
+    actualizarSelectCabanas();
     }
     if (cabanaSelect && cabanaSelect.value) {
         actualizarInfoCabana();

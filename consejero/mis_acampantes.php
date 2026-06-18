@@ -174,6 +174,18 @@ include '../includes/header.php';
                                 <td class="ps-0"><?php echo $acampante['edad']; ?> años</td>
                             </tr>
                             <?php endif; ?>
+                            <?php if ($acampante['primera_vez_campamento']): ?>
+                            <tr>
+                                <td class="text-muted ps-0">
+                                    <i class="fas fa-star text-warning"></i>
+                                </td>
+                                <td class="ps-0">
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="fas fa-star fa-xs"></i> Primera vez
+                                    </span>
+                                </td>
+                            </tr>
+                            <?php endif; ?>
                             <?php if (!empty($acampante['contacto'])): ?>
                             <tr>
                                 <td class="text-muted ps-0">
@@ -307,6 +319,10 @@ include '../includes/header.php';
                                         <td class="text-muted">Contacto</td>
                                         <td id="modalContacto">—</td>
                                     </tr>
+                                    <tr>
+                                        <td class="text-muted">Campamento</td>
+                                        <td id="modalPrimeraVez">—</td>
+                                    </tr>
                                 </table>
                             </div>
 
@@ -387,6 +403,11 @@ function abrirModal(a) {
     document.getElementById('modalIglesia').textContent  = a.iglesia  || '—';
     document.getElementById('modalEstado').textContent   = a.estado_origen || '—';
     document.getElementById('modalContacto').textContent = a.contacto || '—';
+    
+    document.getElementById('modalPrimeraVez').innerHTML =
+        a.primera_vez_campamento == 1
+            ? '<span class="badge bg-warning text-dark"><i class="fas fa-star fa-xs"></i> Primera vez</span>'
+            : '<span class="text-muted small">Ya ha asistido</span>';
 
     // Alerta alergia
     const alertaEl = document.getElementById('modalAlerta');
@@ -409,6 +430,7 @@ function abrirModal(a) {
     // Estado espiritual
     const espEl = document.getElementById('modalEspiritual');
     let espHtml = '';
+    if (a.primera_vez_campamento == 1) espHtml += '<span class="badge bg-warning text-dark"><i class="fas fa-star"></i> Primera vez en campamento</span>';
     if (a.recibio_cristo_semana == 1) espHtml += '<span class="badge bg-success"><i class="fas fa-cross"></i> Recibió a Cristo</span>';
     if (a.consagro_vida_fogata  == 1) espHtml += '<span class="badge bg-warning text-dark"><i class="fas fa-fire"></i> Consagró vida</span>';
     if (a.era_creyente_antes    == 1) espHtml += '<span class="badge bg-primary"><i class="fas fa-bible"></i> Era creyente</span>';

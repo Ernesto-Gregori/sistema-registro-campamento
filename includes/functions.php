@@ -27,7 +27,6 @@ function verificarMantenimiento(PDO $pdo): void {
             $host      = $_SERVER['HTTP_HOST'];
             $url       = "{$protocolo}://{$host}/mantenimiento.html";
 
-            // Destruir sesión DESPUÉS de preparar el redirect
             $_SESSION = [];
             if (ini_get('session.use_cookies')) {
                 $params = session_get_cookie_params();
@@ -46,17 +45,14 @@ function verificarMantenimiento(PDO $pdo): void {
     }
 }
   
-// Verificar si es administrador (funciones futuras por definir)
 function esAdministrador() {  
     return isset($_SESSION['rol']) && $_SESSION['rol'] === 'administrador';  
 }
 
-// Verificar si es encargado de consejeros
 function esEncargadoConsejeros() {
     return isset($_SESSION['rol']) && $_SESSION['rol'] === 'encargado_consejeros';
 }
 
-// Verificar si tiene acceso al panel de gestión (admin O encargado)
 function esGestor() {
     return isset($_SESSION['rol']) && in_array($_SESSION['rol'], [
         'administrador',
@@ -73,7 +69,13 @@ function esAdmisionesOAdmin(): bool {
     return esAdmisiones() || esAdministrador();
 }
 
+// Verificar si es administración (caja/pagos)
+function esAdministracion() {
+    return isset($_SESSION['rol']) && $_SESSION['rol'] === 'administracion';
+}
+
 // ── Calcular saldo de un acampante ───────────────────────────
+// ✅ pagado_100 ya funciona con costo=0 ($saldo <= 0 → 0 <= 0 → true)
 function calcularSaldoAcampante(PDO $pdo, int $acampante_id): array {
     $stmt = $pdo->prepare("
         SELECT a.costo_total,
@@ -94,6 +96,7 @@ function calcularSaldoAcampante(PDO $pdo, int $acampante_id): array {
         'costo_total'  => $costo_total,
         'total_pagado' => $total_pagado,
         'saldo'        => max(0, $saldo),
+        // ✅ costo=0 → saldo=0 → 0 <= 0 → true (beca cuenta como pagado)
         'pagado_100'   => $saldo <= 0,
     ];
 }
@@ -106,8 +109,15 @@ function resumenPagosSemana(PDO $pdo, int $semana_id): array {
             SUM(a.llego)                         AS total_llegaron,
             SUM(a.costo_total)                   AS recaudacion_esperada,
             COALESCE(SUM(p.total_pagado), 0)     AS recaudacion_real,
-            SUM(CASE WHEN p.total_pagado >= a.costo_total 
-                      AND a.costo_total > 0 THEN 1 ELSE 0 END) AS pagados_completo
+            -- ✅ FIX BECA: costo=0 también cuenta como 'pagado completo'
+            SUM(
+                CASE
+                    WHEN a.costo_total = 0                       THEN 1
+                    WHEN p.total_pagado >= a.costo_total
+                         AND a.costo_total > 0                   THEN 1
+                    ELSE 0
+                END
+            ) AS pagados_completo
         FROM acampantes a
         LEFT JOIN (
             SELECT acampante_id, SUM(monto) AS total_pagado
@@ -120,22 +130,18 @@ function resumenPagosSemana(PDO $pdo, int $semana_id): array {
     return $stmt->fetch() ?: [];
 }
   
-// Verificar si es consejero  
 function esConsejero() {  
     return isset($_SESSION['rol']) && $_SESSION['rol'] === 'consejero';  
 } 
 
-//Verificar si es apoyo de consejeros
 function esApoyo() {
     return isset($_SESSION['rol']) && $_SESSION['rol'] === 'apoyo';
 }
   
-// Limpiar datos de entrada  
 function limpiarDatos($data) {  
     return htmlspecialchars(strip_tags(trim($data)));  
 }  
   
-// Formatear fecha - versión mejorada  
 function formatearFecha($fecha) {  
     if (!$fecha || $fecha == '0000-00-00' || $fecha == '1970-01-01') {  
         return 'No registrada';  
@@ -143,26 +149,21 @@ function formatearFecha($fecha) {
     return date('d/m/Y', strtotime($fecha));  
 }   
   
-// Formatear hora  
 function formatearHora($hora) {  
     return date('H:i', strtotime($hora));  
 }  
   
-// Generar hash de password  
 function hashPassword($password) {  
     return password_hash($password, PASSWORD_DEFAULT);  
 }  
   
-// Verificar password  
 function verificarPassword($password, $hash) {  
     return password_verify($password, $hash);  
 }  
   
-// Obtener año actual del campamento  
 function obtenerAnioCampamento(): int {
     global $pdo;
     try {
-        // Fuente de verdad: tabla campamentos (estado = activo)
         if (isset($pdo)) {
             $stmt = $pdo->query("
                 SELECT year FROM campamentos 
@@ -173,7 +174,6 @@ function obtenerAnioCampamento(): int {
             $year = $stmt->fetchColumn();
             if ($year) return (int)$year;
         }
-        // Fallback: configuracion
         $valor = obtenerConfig($pdo, 'anio_activo', date('Y'));
         return (int)$valor;
 
@@ -182,13 +182,11 @@ function obtenerAnioCampamento(): int {
     }
 }
   
-// Subir archivo  
 function subirArchivo($archivo, $directorio = 'uploads/') {  
     $target_dir = "../assets/" . $directorio;  
     $nombre_archivo = time() . "_" . basename($archivo["name"]);  
     $target_file = $target_dir . $nombre_archivo;  
       
-    // Verificar si es un archivo válido  
     $extensiones_permitidas = array("jpg", "jpeg", "png", "gif", "pdf", "doc", "docx", "mp4", "avi");  
     $extension = strtolower(pathinfo($target_file, PATHINFO_EXTENSION));  
       
@@ -200,7 +198,6 @@ function subirArchivo($archivo, $directorio = 'uploads/') {
     return false;  
 }  
 
-// Verificar si el usuario está logueado como consejero  
 function verificarConsejero() {  
     if (!isset($_SESSION['user_id']) || !isset($_SESSION['cabana_id'])) {  
         header('Location: ../login.php');  
@@ -209,7 +206,6 @@ function verificarConsejero() {
     return $_SESSION['cabana_id'];  
 }  
   
-// Debug de sesión (temporal)  
 function debugSesion() {  
     if (isset($_GET['debug'])) {  
         echo "<div class='alert alert-info'>";  
@@ -225,7 +221,6 @@ function obtenerEquipos(PDO $pdo): array {
     static $cache = null;
     if ($cache !== null) return $cache;
 
-    // Fallback siempre disponible
     $cache = [
         'verde' => [
             'clave'     => 'equipo_1',
@@ -247,20 +242,17 @@ function obtenerEquipos(PDO $pdo): array {
         $stmt = $pdo->query("SELECT * FROM equipos ORDER BY id");
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // equipo_1 siempre es 'verde' en cabanas.equipo
-        // equipo_2 siempre es 'azul'  en cabanas.equipo
         $mapa = ['equipo_1' => 'verde', 'equipo_2' => 'azul'];
 
         foreach ($rows as $eq) {
             $clave_bd = $mapa[$eq['clave']] ?? null;
             if ($clave_bd) {
-                // Sobreescribir el fallback con los datos reales de BD
                 $cache[$clave_bd] = $eq;
             }
         }
 
     } catch (Exception $e) {
-        // Tabla no existe — se usa el fallback definido arriba
+        // Tabla no existe — se usa el fallback
     }
 
     return $cache;
@@ -281,7 +273,6 @@ function registrarLog(
         $ip         = $_SERVER['HTTP_X_FORWARDED_FOR']
                       ?? $_SERVER['REMOTE_ADDR']
                       ?? '0.0.0.0';
-        // Tomar solo la primera IP si hay varias (proxy)
         $ip = trim(explode(',', $ip)[0]);
 
         $stmt = $pdo->prepare("INSERT INTO sistema_logs 
@@ -293,14 +284,12 @@ function registrarLog(
             $modulo, $nivel
         ]);
 
-        // Auto-limpiar logs > 30 días (1 de cada 50 requests para no sobrecargar)
         if (rand(1, 50) === 1) {
             $pdo->exec("DELETE FROM sistema_logs 
                         WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)");
         }
 
     } catch (Exception $e) {
-        // Silencioso — el log no debe romper el flujo principal
         error_log('[LOG_ERROR] ' . $e->getMessage());
     }
 }
@@ -333,4 +322,110 @@ function obtenerTodasConfig(PDO $pdo): array {
         return [];
     }
 }
-?>  
+
+/**
+ * Verifica si el acampante completó el pago y activa el check-in
+ * automáticamente si aún no había llegado.
+ *
+ * ✅ FIX BECA: costo_total = 0 → beca completa → check-in inmediato
+ *
+ * Reglas:
+ *  - Solo actúa si llego = 0
+ *  - costo_total = 0  → beca/gratuito → check-in directo ✅
+ *  - costo_total > 0  → requiere SUM(pagos) >= costo_total
+ *
+ * @param  PDO $pdo
+ * @param  int $acampante_id
+ * @return bool  true = check-in activado ahora | false = no aplica
+ */
+function verificarYActivarCheckin(PDO $pdo, int $acampante_id): bool
+{
+    $stmt = $pdo->prepare("
+        SELECT a.llego,
+               a.costo_total,
+               COALESCE(SUM(p.monto), 0) AS total_pagado
+        FROM   acampantes a
+        LEFT   JOIN pagos_acampante p ON p.acampante_id = a.id
+        WHERE  a.id = ?
+        GROUP  BY a.id
+    ");
+    $stmt->execute([$acampante_id]);
+    $d = $stmt->fetch();
+
+    if (!$d)         return false; // no existe
+    if ($d['llego']) return false; // ya tiene check-in
+
+    $costo  = (float)$d['costo_total'];
+    $pagado = (float)$d['total_pagado'];
+
+    // ✅ FIX: beca (costo=0) → check-in inmediato sin requerir pago
+    // Antes: if ($costo <= 0) return false; ← BLOQUEABA a los becados
+    $debe_checkin = ($costo == 0) || ($pagado >= $costo);
+
+    if (!$debe_checkin) return false;
+
+    // ✅ Activar check-in
+    $pdo->prepare("
+        UPDATE acampantes
+        SET    llego         = 1,
+               fecha_llegada = NOW()
+        WHERE  id    = ?
+          AND  llego = 0
+    ")->execute([$acampante_id]);
+
+    return true;
+}
+
+/**
+ * Valida si una edad cumple el rango de una semana y cabaña.
+ * La config de cabaña sobreescribe la de semana cuando existe.
+ * Retorna ['valido' => bool, 'mensaje' => string]
+ */
+function validarEdadAcampante(
+    PDO  $pdo,
+    int  $edad,
+    int  $semana_id,
+    ?int $cabana_id = null
+): array {
+    // Límites de la semana
+    $stmt = $pdo->prepare(
+        "SELECT edad_min, edad_max FROM semanas_campamento WHERE id = ?"
+    );
+    $stmt->execute([$semana_id]);
+    $sem = $stmt->fetch();
+
+    $emin = $sem['edad_min'];
+    $emax = $sem['edad_max'];
+
+    // Sobreescribir con config de cabaña si existe
+    if ($cabana_id) {
+        $stmt2 = $pdo->prepare("
+            SELECT edad_min, edad_max FROM cabana_semana_config
+            WHERE cabana_id = ? AND semana_id = ?
+        ");
+        $stmt2->execute([$cabana_id, $semana_id]);
+        $cfg = $stmt2->fetch();
+        if ($cfg) {
+            if ($cfg['edad_min'] !== null) $emin = $cfg['edad_min'];
+            if ($cfg['edad_max'] !== null) $emax = $cfg['edad_max'];
+        }
+    }
+
+    if ($emin !== null && $edad < (int)$emin)
+        return [
+            'valido'  => false,
+            'mensaje' => "El acampante tiene {$edad} años. El mínimo para esta semana es {$emin}."
+        ];
+
+    if ($emax !== null && $edad > (int)$emax)
+        return [
+            'valido'  => false,
+            'mensaje' => "El acampante tiene {$edad} años. El máximo para esta semana es {$emax}."
+        ];
+
+    return ['valido' => true, 'mensaje' => ''];
+}
+?>
+
+
+
