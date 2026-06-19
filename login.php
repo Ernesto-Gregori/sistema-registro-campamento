@@ -38,6 +38,8 @@ if ($_POST) {
                     header('Location: apoyo/dashboard.php');
                 } elseif ($usuario['rol'] === 'admisiones') {
                     header('Location: admisiones/dashboard.php');
+                } elseif ($usuario['rol'] === 'direccion_campamento') {
+                    header('Location: direccion/dashboard.php');
                 }
                 exit();  
             } else {
@@ -441,7 +443,7 @@ if ($_POST) {
         <!-- Branding -->
         <div class="login-brand-footer">
             <span>
-                <a href="https://www.wol.org" target="_blank">Word of Life</a>
+                <a href="https://palabradevidasv.org/" target="_blank">Palabra de Vida El Salvador</a>
                 · Campamento PV · <?php echo date('Y'); ?>
             </span>
         </div>

@@ -13,7 +13,18 @@
                     <div class="footer-brand">
                         <span class="fi"><i class="fas fa-campground"></i></span>
                         <span>
-                            Campamento PV
+                            <?php
+                            // $_nombre_sistema viene del header; fallback por si acaso
+                            $__nombre_footer = $_nombre_sistema ?? '';
+                            if (empty($__nombre_footer)) {
+                                try {
+                                    $__nombre_footer = obtenerConfig($pdo, 'nombre_sistema', 'ConectaPV');
+                                } catch (Exception $__e) {
+                                    $__nombre_footer = 'ConectaPV';
+                                }
+                            }
+                            echo htmlspecialchars($__nombre_footer);
+                            ?>
                             <span class="footer-copyright">
                                 © <?php echo date('Y'); ?>
                             </span>
@@ -26,7 +37,6 @@
                     <?php
                     $_semana_footer = null;
                     try {
-                        global $pdo;
                         if (isset($pdo)) {
                             $_sf = $pdo->query(
                                 "SELECT nombre, fecha_fin
@@ -56,14 +66,21 @@
                 <div class="col-md-4 text-md-end text-center">
                     <div class="rol-info">
                         <?php
-                        if (esEncargadoConsejeros()):
-                            echo '<strong><i class="fas fa-cog me-1"></i>Encargado consejeros</strong>';
-                        elseif (esConsejero()):
-                            echo '<strong><i class="fas fa-user-friends me-1"></i>Consejero</strong>';
-                        else:
-                            echo '<strong><i class="fas fa-clipboard-list me-1"></i>Apoyo</strong>';
-                        endif;
+                        $__icon  = 'fa-user';
+                        $__label = 'Usuario';
+
+                        if     (isset($_esAdmin)          ? $_esAdmin          : esAdministrador())      { $__icon = 'fa-shield-alt';     $__label = 'Administrador'; }
+                        elseif (isset($_esEncargado)       ? $_esEncargado      : esEncargadoConsejeros()) { $__icon = 'fa-user-tie';        $__label = 'Encargado Consejeros'; }
+                        elseif (isset($_esConsejero)       ? $_esConsejero      : esConsejero())           { $__icon = 'fa-user-friends';    $__label = 'Consejero'; }
+                        elseif (isset($_esAdmisiones)      ? $_esAdmisiones     : esAdmisiones())          { $__icon = 'fa-clipboard-list';  $__label = 'Admisiones'; }
+                        elseif (isset($_esAdministracion)  ? $_esAdministracion : esAdministracion())      { $__icon = 'fa-cash-register';   $__label = 'Administración'; }
+                        elseif (function_exists('esRol') && esRol('direccion_campamento'))                  { $__icon = 'fa-star';            $__label = 'Dirección Campamento'; }
+                        elseif (isset($_esApoyo)           ? $_esApoyo          : esApoyo())               { $__icon = 'fa-hands-helping';   $__label = 'Apoyo'; }
                         ?>
+                        <strong>
+                            <i class="fas <?php echo $__icon; ?> me-1"></i>
+                            <?php echo $__label; ?>
+                        </strong>
                         <span class="footer-dot">·</span>
                         <span>v2.0</span>
                     </div>

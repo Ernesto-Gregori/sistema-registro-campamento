@@ -74,6 +74,15 @@ function esAdministracion() {
     return isset($_SESSION['rol']) && $_SESSION['rol'] === 'administracion';
 }
 
+function esDireccion() {
+    return isset($_SESSION['rol']) && $_SESSION['rol'] === 'direccion_campamento';
+}
+
+// ── Verificador genérico de rol (para roles sin función propia) ──
+function esRol(string $rol): bool {
+    return isset($_SESSION['rol']) && $_SESSION['rol'] === $rol;
+}
+
 // ── Calcular saldo de un acampante ───────────────────────────
 // ✅ pagado_100 ya funciona con costo=0 ($saldo <= 0 → 0 <= 0 → true)
 function calcularSaldoAcampante(PDO $pdo, int $acampante_id): array {

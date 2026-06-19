@@ -65,7 +65,6 @@ const BYPASS_ROUTES = [
 ];
 /* ── INSTALL ── */
 self.addEventListener('install', event => {
-    console.log(`[SW] Instalando ${SW_VERSION}`);
     event.waitUntil(
         caches.open(CACHE_STATIC)
             .then(cache =>
@@ -83,14 +82,13 @@ self.addEventListener('install', event => {
 
 /* ── ACTIVATE ── */
 self.addEventListener('activate', event => {
-    console.log(`[SW] Activando ${SW_VERSION}`);
+
     event.waitUntil(
         caches.keys()
             .then(keys => Promise.all(
                 keys
                     .filter(k => k !== CACHE_STATIC && k !== CACHE_DYNAMIC)
                     .map(k => {
-                        console.log(`[SW] Eliminando cache viejo: ${k}`);
                         return caches.delete(k);
                     })
             ))
@@ -131,7 +129,6 @@ self.addEventListener('fetch', event => {
 
 /* ── SYNC ── */
 self.addEventListener('sync', event => {
-    console.log(`[SW] Background sync: ${event.tag}`);
     if (event.tag === 'sync-consejerias') {
         event.waitUntil(
             syncPendingData('consejerias_pendientes', '/consejero/api_save_consejeria.php')
@@ -222,7 +219,6 @@ async function networkFirst(request) {
             !esRespuestaAccion) {
             const cache = await caches.open(CACHE_DYNAMIC);
             cache.put(request, response.clone());
-            console.log('[SW] ✓ Red OK + guardado en caché:', request.url);
         } else if (esRespuestaAccion) {
             console.log('[SW] ↩ Respuesta de acción — no cacheada:', url.pathname);
         }
@@ -257,14 +253,12 @@ async function buscarEnCache(request) {
     // 1. URL exacta (sin parámetros de acción)
     let cached = await caches.match(request);
     if (cached && cached.ok && cached.type !== 'opaqueredirect') {
-        console.log('[SW] ✓ Caché exacto:', request.url);
         return cached;
     }
 
     // 2. Solo pathname (sin query params)
     cached = await caches.match(url.pathname);
     if (cached && cached.ok && cached.type !== 'opaqueredirect') {
-        console.log('[SW] ✓ Caché pathname:', url.pathname);
         return cached;
     }
 
@@ -282,7 +276,6 @@ async function buscarEnCache(request) {
         if (match) {
             const found = await store.match(match);
             if (found) {
-                console.log('[SW] ✓ Caché búsqueda:', url.pathname);
                 return found;
             }
         }
@@ -304,7 +297,6 @@ async function buscarEnCache(request) {
 async function syncPendingData(storeName, endpoint) {
     const db    = await openDB();
     const items = await getAllFromStore(db, storeName);
-    console.log(`[SW] Sincronizando ${items.length} items de "${storeName}"...`);
 
     for (const item of items) {
         try {
@@ -315,7 +307,6 @@ async function syncPendingData(storeName, endpoint) {
             });
             if (response.ok) {
                 await deleteFromStore(db, storeName, item.id);
-                console.log(`[SW] ✓ Sincronizado ID ${item.id}`);
             } else {
                 console.warn(`[SW] ✗ Error servidor ID ${item.id}:`, response.status);
             }
@@ -431,7 +422,6 @@ self.addEventListener('message', event => {
                     .then(res => {
                         if (res.ok) {
                             cache.put(url, res.clone());
-                            console.log('[SW] ✓ URL cacheada por mensaje:', url);
                         }
                     })
                     .catch(() => console.warn('[SW] No se pudo cachear:', url))

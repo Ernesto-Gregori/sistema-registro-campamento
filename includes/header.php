@@ -57,16 +57,17 @@ $_esEncargado       = esEncargadoConsejeros();
 $_esConsejero       = esConsejero();
 $_esApoyo           = esApoyo();
 $_esAdmisiones      = esAdmisiones();
-$_esAdministracion  = esAdministracion();   // ← NUEVO
+$_esAdministracion  = esAdministracion();  
 
 // ── Label y badge según rol ─────────────────────────────────
 $_rolLabel =
-    $_esAdmin          ? 'Administrador'  :
-   ($_esEncargado      ? 'Encargado'      :
-   ($_esConsejero      ? 'Consejero'      :
-   ($_esAdmisiones     ? 'Inscripción'    :   // renombrado para claridad
-   ($_esAdministracion ? 'Administración' :
-                         'Apoyo'))));
+    $_esAdmin          ? 'Administrador'       :
+   ($_esEncargado      ? 'Encargado'           :
+   ($_esConsejero      ? 'Consejero'           :
+   ($_esAdmisiones     ? 'Admisiones'          :
+   ($_esAdministracion ? 'Administración'      :
+   (esRol('direccion_campamento') ? 'Dirección' :
+                         'Apoyo')))));
 
 $_rolBadgeClass =
     $_esAdmin          ? 'rol-badge-admin'          :
@@ -74,7 +75,8 @@ $_rolBadgeClass =
    ($_esConsejero      ? 'rol-badge-consejero'      :
    ($_esAdmisiones     ? 'rol-badge-admisiones'     :
    ($_esAdministracion ? 'rol-badge-administracion' :
-                         'rol-badge-apoyo'))));
+   (esRol('direccion_campamento') ? 'rol-badge-direccion' :
+                         'rol-badge-apoyo')))));
 
 // ── Dashboard home según rol ────────────────────────────────
 $_dashboardHome =
@@ -421,6 +423,12 @@ $_dashboardHome =
                     <a class="nav-link<?php echo navActivo('lista_acampantes.php'); ?>"
                        href="/apoyo/lista_acampantes.php">
                         <i class="fas fa-users"></i> Acampantes
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link<?php echo navActivo('config_edad_cabanas.php'); ?>"
+                        href="/apoyo/config_edad_cabanas.php">
+                        <i class="fas fa-sliders-h"></i> Edades por Cabaña
                     </a>
                 </li>
                 <li class="nav-item">
