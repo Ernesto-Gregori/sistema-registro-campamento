@@ -125,7 +125,7 @@ include '../includes/header.php';
 <!-- Módulos del admin -->
 <div class="row">
 
-    <!-- Gestión de Sistema -->
+    <!-- Gestión del Sistema -->
     <div class="col-md-6 mb-4">
         <div class="card h-100">
             <div class="card-header bg-dark text-white">
@@ -134,46 +134,44 @@ include '../includes/header.php';
             <div class="card-body">
                 <div class="list-group list-group-flush">
 
-                    <a href="mantenimiento.php" class="list-group-item list-group-item-action d-flex align-items-center gap-3">
+                    <a href="mantenimiento.php"
+                       class="list-group-item list-group-item-action d-flex align-items-center gap-3">
                         <div class="rounded-circle bg-info bg-opacity-10 p-2">
                             <i class="fas fa-tools text-info"></i>
                         </div>
                         <div>
-                            <strong>Mantenimiento</strong>
-                            <small class="d-block text-muted">Optimizar BD, limpiar sesiones, verificar integridad</small>
+                            <strong>Mantenimiento y Backups</strong>
+                            <small class="d-block text-muted">
+                                Optimizar BD, limpiar sesiones, generar y descargar backups
+                            </small>
                         </div>
                         <i class="fas fa-chevron-right ms-auto text-muted"></i>
                     </a>
 
-                    <a href="backup_manager.php" class="list-group-item list-group-item-action d-flex align-items-center gap-3">
-                        <div class="rounded-circle bg-success bg-opacity-10 p-2">
-                            <i class="fas fa-database text-success"></i>
-                        </div>
-                        <div>
-                            <strong>Gestor de Backups</strong>
-                            <small class="d-block text-muted">Generar, descargar y eliminar backups</small>
-                        </div>
-                        <i class="fas fa-chevron-right ms-auto text-muted"></i>
-                    </a>
-
-                    <a href="logs.php" class="list-group-item list-group-item-action d-flex align-items-center gap-3">
+                    <a href="logs.php"
+                       class="list-group-item list-group-item-action d-flex align-items-center gap-3">
                         <div class="rounded-circle bg-warning bg-opacity-10 p-2">
                             <i class="fas fa-file-alt text-warning"></i>
                         </div>
                         <div>
                             <strong>Logs del Sistema</strong>
-                            <small class="d-block text-muted">Accesos, errores y acciones registradas</small>
+                            <small class="d-block text-muted">
+                                Accesos, errores y acciones registradas
+                            </small>
                         </div>
                         <i class="fas fa-chevron-right ms-auto text-muted"></i>
                     </a>
 
-                    <a href="configuracion.php" class="list-group-item list-group-item-action d-flex align-items-center gap-3">
+                    <a href="configuracion.php"
+                       class="list-group-item list-group-item-action d-flex align-items-center gap-3">
                         <div class="rounded-circle bg-secondary bg-opacity-10 p-2">
                             <i class="fas fa-sliders-h text-secondary"></i>
                         </div>
                         <div>
                             <strong>Configuración Global</strong>
-                            <small class="d-block text-muted">Nombre del campamento, país, año activo</small>
+                            <small class="d-block text-muted">
+                                Nombre del campamento, modo mantenimiento, año activo
+                            </small>
                         </div>
                         <i class="fas fa-chevron-right ms-auto text-muted"></i>
                     </a>
@@ -192,46 +190,64 @@ include '../includes/header.php';
             <div class="card-body">
                 <div class="list-group list-group-flush">
 
-                    <a href="gestionar_usuarios.php" class="list-group-item list-group-item-action d-flex align-items-center gap-3">
+                    <a href="gestionar_usuarios.php"
+                       class="list-group-item list-group-item-action d-flex align-items-center gap-3">
                         <div class="rounded-circle bg-primary bg-opacity-10 p-2">
                             <i class="fas fa-users text-primary"></i>
                         </div>
                         <div>
                             <strong>Gestionar Usuarios</strong>
-                            <small class="d-block text-muted">Crear, editar, desactivar todos los roles</small>
+                            <small class="d-block text-muted">
+                                Crear, editar, desactivar y resetear contraseñas
+                            </small>
                         </div>
                         <i class="fas fa-chevron-right ms-auto text-muted"></i>
                     </a>
 
-                    <a href="cambiar_password.php" class="list-group-item list-group-item-action d-flex align-items-center gap-3">
-                        <div class="rounded-circle bg-danger bg-opacity-10 p-2">
-                            <i class="fas fa-key text-danger"></i>
-                        </div>
-                        <div>
-                            <strong>Gestionar Contraseñas</strong>
-                            <small class="d-block text-muted">Restablecer contraseñas de cualquier usuario</small>
-                        </div>
-                        <i class="fas fa-chevron-right ms-auto text-muted"></i>
-                    </a>
-
-                    <a href="reporte_anual.php" class="list-group-item list-group-item-action d-flex align-items-center gap-3">
+                    <a href="reporte_anual.php"
+                       class="list-group-item list-group-item-action d-flex align-items-center gap-3">
                         <div class="rounded-circle bg-info bg-opacity-10 p-2">
                             <i class="fas fa-chart-line text-info"></i>
                         </div>
                         <div>
                             <strong>Reporte Anual</strong>
-                            <small class="d-block text-muted">Consolidado de todo el año por semanas y meses</small>
+                            <small class="d-block text-muted">
+                                Consolidado de todo el año por semanas
+                            </small>
                         </div>
                         <i class="fas fa-chevron-right ms-auto text-muted"></i>
                     </a>
 
-                    <a href="../reportes/generar_reporte_mensual.php" class="list-group-item list-group-item-action d-flex align-items-center gap-3">
+                    <?php
+                    // Solo mostrar si el archivo existe
+                    $ruta_reporte_mensual = '../reportes/generar_reporte_mensual.php';
+                    if (file_exists($ruta_reporte_mensual)):
+                    ?>
+                    <a href="<?= $ruta_reporte_mensual ?>"
+                       class="list-group-item list-group-item-action d-flex align-items-center gap-3">
                         <div class="rounded-circle bg-warning bg-opacity-10 p-2">
                             <i class="fas fa-calendar-alt text-warning"></i>
                         </div>
                         <div>
                             <strong>Reporte Mensual</strong>
-                            <small class="d-block text-muted">Estadísticas del mes seleccionado</small>
+                            <small class="d-block text-muted">
+                                Estadísticas del mes seleccionado
+                            </small>
+                        </div>
+                        <i class="fas fa-chevron-right ms-auto text-muted"></i>
+                    </a>
+                    <?php endif; ?>
+
+                    <a href="cambiar_password.php"
+                       class="list-group-item list-group-item-action d-flex align-items-center gap-3">
+                        <div class="rounded-circle bg-danger bg-opacity-10 p-2">
+                            <i class="fas fa-key text-danger"></i>
+                        </div>
+                        <div>
+                            <strong>Cambiar mi Contraseña</strong>
+                            <small class="d-block text-muted">
+                                Actualizar la contraseña de tu cuenta de administrador
+                            </small>
                         </div>
                         <i class="fas fa-chevron-right ms-auto text-muted"></i>
                     </a>
@@ -242,5 +258,46 @@ include '../includes/header.php';
     </div>
 
 </div>
+
+<!-- Logs recientes al pie del dashboard -->
+<?php if (!empty($stats['logs'])): ?>
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="fas fa-clipboard-list"></i> Actividad Reciente</h6>
+                <a href="logs.php" class="btn btn-sm btn-outline-secondary">
+                    Ver todos <i class="fas fa-arrow-right"></i>
+                </a>
+            </div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    <?php foreach ($stats['logs'] as $log):
+                        $badge = match($log['nivel']) {
+                            'success' => 'bg-success',
+                            'warning' => 'bg-warning text-dark',
+                            'error'   => 'bg-danger',
+                            default   => 'bg-secondary',
+                        };
+                    ?>
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-3 py-2">
+                        <div>
+                            <strong class="small"><?= htmlspecialchars($log['username']) ?></strong>
+                            <span class="text-muted small ms-2"><?= htmlspecialchars($log['accion']) ?></span>
+                            <span class="badge <?= $badge ?> ms-1" style="font-size:9px;">
+                                <?= $log['nivel'] ?>
+                            </span>
+                        </div>
+                        <small class="text-muted text-nowrap">
+                            <?= date('d/m H:i', strtotime($log['created_at'])) ?>
+                        </small>
+                    </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <?php include '../includes/footer.php'; ?>

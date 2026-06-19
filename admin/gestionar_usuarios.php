@@ -8,6 +8,17 @@ if (!esAdministrador()) {
     exit();
 }
 
+// ── Leer roles disponibles directamente del ENUM de la BD ──
+function obtenerRolesEnum(PDO $pdo): array {
+    $stmt = $pdo->query("SHOW COLUMNS FROM usuarios LIKE 'rol'");
+    $row  = $stmt->fetch();
+    // El Type tiene formato: enum('val1','val2',...)
+    preg_match_all("/'([^']+)'/", $row['Type'], $matches);
+    return $matches[1] ?? [];
+}
+
+$roles_enum = obtenerRolesEnum($pdo); // ['administrador','encargado_consejeros',...]
+
 $titulo  = "Gestionar Usuarios";
 $message = '';
 $error   = '';
@@ -212,14 +223,32 @@ if ($accion === 'editar' && $edit_id) {
     }
 }
 
-// Colores y labels por rol
-$roles_config = [
-    'administrador'       => ['color' => 'danger',  'icon' => 'fa-shield-alt',      'label' => 'Administrador'],
-    'encargado_consejeros'=> ['color' => 'primary', 'icon' => 'fa-user-tie',        'label' => 'Encargado Consejeros'],
-    'consejero'           => ['color' => 'success', 'icon' => 'fa-user-friends',    'label' => 'Consejero'],
-    'apoyo'               => ['color' => 'warning', 'icon' => 'fa-hands-helping',   'label' => 'Apoyo'],
-    'admisiones'          => ['color' => 'info',    'icon' => 'fa-clipboard-list',  'label' => 'Admisiones'],
+// Configuración visual conocida — solo agrega aquí cuando quieras personalizar
+$roles_visual = [
+    'administrador'        => ['color' => 'danger',    'icon' => 'fa-shield-alt',     'label' => 'Administrador'],
+    'encargado_consejeros' => ['color' => 'primary',   'icon' => 'fa-user-tie',       'label' => 'Encargado Consejeros'],
+    'consejero'            => ['color' => 'success',   'icon' => 'fa-user-friends',   'label' => 'Consejero'],
+    'apoyo'                => ['color' => 'warning',   'icon' => 'fa-hands-helping',  'label' => 'Apoyo'],
+    'admisiones'           => ['color' => 'info',      'icon' => 'fa-clipboard-list', 'label' => 'Admisiones'],
+    'administracion'       => ['color' => 'secondary', 'icon' => 'fa-cash-register',  'label' => 'Administración'],
+    'direccion_campamento' => ['color' => 'dark',      'icon' => 'fa-star',           'label' => 'Dirección Campamento'],
 ];
+
+// Construir $roles_config con todos los valores del ENUM.
+// Si un rol nuevo no está en $roles_visual, genera fallback automático.
+$roles_config = [];
+foreach ($roles_enum as $rol_val) {
+    if (isset($roles_visual[$rol_val])) {
+        $roles_config[$rol_val] = $roles_visual[$rol_val];
+    } else {
+        // Fallback: badge gris, icono genérico, label formateado
+        $roles_config[$rol_val] = [
+            'color' => 'secondary',
+            'icon'  => 'fa-user',
+            'label' => ucwords(str_replace('_', ' ', $rol_val)),
+        ];
+    }
+}
 
 include '../includes/header.php';
 ?>

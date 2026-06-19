@@ -44,31 +44,51 @@ try {
         ? "AND c.genero = " . $pdo->quote($genero_acceso)
         : "";
 
-    // ── Cabañas por equipo ──────────────────────────────
+    // ── Cabañas ───────────────────────────────────────────────────
     if ($semana_id_activa) {
         $sql_cab = "SELECT c.id, c.nombre_cabana, c.capacidad_maxima, c.genero, c.equipo,
-                    COUNT(a.id) as total_acampantes
+                    MAX(CASE WHEN cs.rol = 'principal'  THEN cs.nombre_consejero END) AS consejero_principal,
+                    MAX(CASE WHEN cs.rol = 'asistente'  THEN cs.nombre_consejero END) AS consejero_asistente,
+                    COALESCE(csc.edad_min, s.edad_min) AS edad_min_efectiva,
+                    COALESCE(csc.edad_max, s.edad_max) AS edad_max_efectiva,
+                    COUNT(DISTINCT a.id) AS total_acampantes
                     FROM cabanas c
                     LEFT JOIN acampantes a ON c.id = a.cabana_id
                         AND a.semana_id = ? AND a.estado = 'activo'
+                    LEFT JOIN consejeros_semana cs
+                        ON cs.cabana_id = c.id AND cs.semana_id = ?
+                    LEFT JOIN cabana_semana_config csc
+                        ON csc.cabana_id = c.id AND csc.semana_id = ?
+                    LEFT JOIN semanas_campamento s ON s.id = ?
                     WHERE c.activa = 1 $filtro_genero_sql
-                    GROUP BY c.id, c.nombre_cabana, c.capacidad_maxima, c.genero, c.equipo
+                    GROUP BY c.id, c.nombre_cabana, c.capacidad_maxima, c.genero, c.equipo,
+                             edad_min_efectiva, edad_max_efectiva
                     ORDER BY c.equipo ASC, c.nombre_cabana ASC";
-        $stmt = $pdo->prepare($sql_cab);
-        $stmt->execute([$semana_id_activa]);
+        $stmt_cab = $pdo->prepare($sql_cab);
+        $stmt_cab->execute([
+            $semana_id_activa,
+            $semana_id_activa,
+            $semana_id_activa,
+            $semana_id_activa
+        ]);;
     } else {
         $sql_cab = "SELECT c.id, c.nombre_cabana, c.capacidad_maxima, c.genero, c.equipo,
-                    COUNT(a.id) as total_acampantes
+                    c.consejero_principal,
+                    c.consejero_asistente,
+                    NULL AS edad_min_efectiva,
+                    NULL AS edad_max_efectiva,
+                    COUNT(DISTINCT a.id) AS total_acampantes
                     FROM cabanas c
                     LEFT JOIN acampantes a ON c.id = a.cabana_id
                         AND a.year_campamento = ? AND a.estado = 'activo'
                     WHERE c.activa = 1 $filtro_genero_sql
-                    GROUP BY c.id, c.nombre_cabana, c.capacidad_maxima, c.genero, c.equipo
+                    GROUP BY c.id, c.nombre_cabana, c.capacidad_maxima, c.genero, c.equipo,
+                             c.consejero_principal, c.consejero_asistente
                     ORDER BY c.equipo ASC, c.nombre_cabana ASC";
-        $stmt = $pdo->prepare($sql_cab);
-        $stmt->execute([obtenerAnioCampamento()]);
+        $stmt_cab = $pdo->prepare($sql_cab);
+        $stmt_cab->execute([obtenerAnioCampamento()]);
     }
-    $cabanas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $cabanas = $stmt_cab->fetchAll(PDO::FETCH_ASSOC);
 
     // ── Stats por equipo (subconsulta para evitar duplicados) ──
     $filtro_genero_cab = $genero_acceso !== 'ambos'

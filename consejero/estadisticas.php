@@ -141,7 +141,7 @@ include '../includes/header.php';
                 <i class="fas fa-users mb-2"></i>  
                 <h3><?php echo $totalAcampantes; ?></h3>  
                 <p class="mb-0">Mis Acampantes</p>  
-                <small class="text-muted"><?php echo $cabana['capacidad_maxima']; ?> capacidad</small>  
+                <small class="text-muted-w"><?php echo $cabana['capacidad_maxima']; ?> capacidad</small>  
             </div>  
         </div>  
     </div>  
@@ -151,7 +151,7 @@ include '../includes/header.php';
                 <i class="fas fa-comments mb-2"></i>  
                 <h3><?php echo $totalConsejerias; ?></h3>  
                 <p class="mb-0">Consejerías</p>  
-                <small class="text-muted">de <?php echo $totalAcampantes * 3; ?> esperadas</small>  
+                <small class="text-muted-w">de <?php echo $totalAcampantes * 3; ?> esperadas</small>  
             </div>  
         </div>  
     </div>  
@@ -161,7 +161,7 @@ include '../includes/header.php';
                 <i class="fas fa-cross mb-2"></i>  
                 <h3><?php echo $estadisticasEspirituales['nuevos_creyentes']; ?></h3>  
                 <p class="mb-0">Nuevos Creyentes</p>  
-                <small class="text-muted">recibieron a Cristo</small>  
+                <small class="text-muted-w">recibieron a Cristo</small>  
             </div>  
         </div>  
     </div>  
@@ -171,7 +171,7 @@ include '../includes/header.php';
                 <i class="fas fa-fire mb-2"></i>  
                 <h3><?php echo $estadisticasEspirituales['consagraciones']; ?></h3>  
                 <p class="mb-0">Consagraciones</p>  
-                <small class="text-muted">en la fogata</small>  
+                <small class="text-muted-w">en la fogata</small>  
             </div>  
         </div>  
     </div>  

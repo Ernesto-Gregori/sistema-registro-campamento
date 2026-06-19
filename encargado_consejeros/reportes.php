@@ -210,6 +210,119 @@ try {
     // ── Ocupación general ──────────────────────────────────────
     $capacidad_total = array_sum(array_column($estadisticasCabanas, 'capacidad_maxima'));
 
+    // ── Por iglesia ────────────────────────────────────────────
+    $where_igl = $semana_id ? "a.semana_id = ?" : "a.year_campamento = ?";
+    $stmt = $pdo->prepare("
+        SELECT
+            COALESCE(NULLIF(TRIM(a.iglesia), ''), 'Sin iglesia registrada') AS iglesia,
+            COUNT(DISTINCT a.id)                                               AS total,
+            COUNT(DISTINCT CASE WHEN a.sexo='masculino' THEN a.id END)        AS masculino,
+            COUNT(DISTINCT CASE WHEN a.sexo='femenino'  THEN a.id END)        AS femenino,
+            COUNT(DISTINCT CASE WHEN a.recibio_cristo_semana=1 THEN a.id END) AS recibio_cristo,
+            COUNT(DISTINCT CASE WHEN a.consagro_vida_fogata =1 THEN a.id END) AS consagro_vida,
+            COUNT(DISTINCT CASE WHEN a.primera_vez_campamento=1 THEN a.id END) AS primera_vez,
+            COUNT(DISTINCT sc.id)                                              AS total_sesiones
+        FROM acampantes a
+        LEFT JOIN sesiones_consejeria sc ON sc.acampante_id = a.id
+        WHERE $where_igl AND a.estado = 'activo'
+        GROUP BY iglesia
+        ORDER BY total DESC
+    ");
+    $stmt->execute([$semana_id ?: $year]);
+    $porIglesia = $stmt->fetchAll();
+
+    // ── Lista cabañas para filtro individual ──────────────────
+    $stmt = $pdo->query("SELECT id, nombre_cabana FROM cabanas WHERE activa = 1 ORDER BY nombre_cabana");
+    $cabanasLista = $stmt->fetchAll();
+
+    // ── Acampantes para reporte individual ────────────────────
+    $cabana_id_individual = (int)($_GET['cabana_id_ind'] ?? 0);
+    $search_individual    = trim($_GET['search_ind'] ?? '');
+    $acampantesIndividual = [];
+
+    if ($tipo_reporte === 'individual') {
+        $sql_ind = "
+            SELECT a.*, c.nombre_cabana, c.equipo,
+                   COUNT(DISTINCT sc.id)  AS total_sesiones,
+                   MAX(sc.fecha_sesion)   AS ultima_sesion,
+                   ee.observaciones_generales
+            FROM acampantes a
+            LEFT JOIN cabanas c ON a.cabana_id = c.id
+            LEFT JOIN sesiones_consejeria sc ON sc.acampante_id = a.id
+            LEFT JOIN evaluacion_espiritual ee ON ee.acampante_id = a.id
+            WHERE " . ($semana_id ? "a.semana_id = ?" : "a.year_campamento = ?") . "
+              AND a.estado = 'activo'
+        ";
+        $params_ind = [$semana_id ?: $year];
+
+        if ($cabana_id_individual) {
+            $sql_ind .= " AND a.cabana_id = ?";
+            $params_ind[] = $cabana_id_individual;
+        }
+        if ($search_individual) {
+            $sql_ind .= " AND (a.nombre LIKE ? OR a.iglesia LIKE ?)";
+            $params_ind[] = "%$search_individual%";
+            $params_ind[] = "%$search_individual%";
+        }
+
+        $sql_ind .= " GROUP BY a.id ORDER BY c.nombre_cabana, a.nombre";
+        $stmt = $pdo->prepare($sql_ind);
+        $stmt->execute($params_ind);
+        $acampantesIndividual = $stmt->fetchAll();
+    }
+    
+        // ── Lista de iglesias disponibles para el selector ────────
+    $stmt = $pdo->prepare("
+        SELECT DISTINCT
+            COALESCE(NULLIF(TRIM(iglesia), ''), 'Sin iglesia registrada') AS iglesia
+        FROM acampantes
+        WHERE " . ($semana_id ? "semana_id = ?" : "year_campamento = ?") . "
+          AND estado = 'activo'
+        ORDER BY iglesia ASC
+    ");
+    $stmt->execute([$semana_id ?: $year]);
+    $iglesiasLista = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+    // ── Detalle de acampantes de una iglesia específica ───────
+    $iglesia_filtro      = trim($_GET['iglesia_filtro'] ?? '');
+    $acampantesPorIglesia = [];
+
+    if ($tipo_reporte === 'iglesia' && $iglesia_filtro) {
+        $iglesia_cond = $iglesia_filtro === 'Sin iglesia registrada'
+            ? "(a.iglesia IS NULL OR TRIM(a.iglesia) = '')"
+            : "TRIM(a.iglesia) = ?";
+
+        $params_igl = [$semana_id ?: $year];
+        if ($iglesia_filtro !== 'Sin iglesia registrada') {
+            $params_igl[] = $iglesia_filtro;
+        }
+
+        $stmt = $pdo->prepare("
+            SELECT
+                a.id, a.nombre, a.edad, a.sexo, a.iglesia,
+                a.recibio_cristo_semana, a.consagro_vida_fogata,
+                a.era_creyente_antes, a.primera_vez_campamento,
+                c.nombre_cabana,
+                COUNT(DISTINCT sc.id)        AS total_sesiones,
+                GROUP_CONCAT(
+                    DISTINCT COALESCE(tc.tema, sc.tema_personalizado)
+                    ORDER BY sc.numero_sesion
+                    SEPARATOR ' · '
+                )                            AS temas_tratados
+            FROM acampantes a
+            LEFT JOIN cabanas c             ON a.cabana_id   = c.id
+            LEFT JOIN sesiones_consejeria sc ON sc.acampante_id = a.id
+            LEFT JOIN temas_consejeria tc   ON sc.tema_id    = tc.id
+            WHERE " . ($semana_id ? "a.semana_id = ?" : "a.year_campamento = ?") . "
+              AND a.estado = 'activo'
+              AND $iglesia_cond
+            GROUP BY a.id
+            ORDER BY a.nombre
+        ");
+        $stmt->execute($params_igl);
+        $acampantesPorIglesia = $stmt->fetchAll();
+    }
+
 } catch (Exception $e) {
     $error = "Error al cargar estadísticas: " . $e->getMessage();
 }
@@ -279,6 +392,7 @@ include '../includes/header.php';
                         <select class="form-select" name="tipo" id="tipo">  
                             <option value="general" <?php echo $tipo_reporte == 'general' ? 'selected' : ''; ?>>Reporte General</option>  
                             <option value="cabana" <?php echo $tipo_reporte == 'cabana' ? 'selected' : ''; ?>>Por Cabaña</option>  
+                            <option value="iglesia"    <?php echo $tipo_reporte == 'iglesia'    ? 'selected' : ''; ?>>Por Iglesia</option>
                             <option value="individual" <?php echo $tipo_reporte == 'individual' ? 'selected' : ''; ?>>Individual</option>  
                         </select>  
                     </div>  
@@ -296,22 +410,30 @@ include '../includes/header.php';
             <div class="card-header">  
                 <h6><i class="fas fa-download"></i> Generar PDFs</h6>  
             </div>  
-            <div class="card-body">  
-                <div class="d-grid gap-2">  
-                    <a href="imprimir_reporte.php?tipo=general&year=<?php echo $year; ?>&semana_id=<?php echo $semana_id; ?>"   
-                       class="btn btn-success" target="_blank">  
-                        <i class="fas fa-print"></i> Imprimir Reporte General  
-                    </a>  
-                    <a href="imprimir_reporte.php?tipo=cabanas&year=<?php echo $year; ?>&semana_id=<?php echo $semana_id; ?>"   
-                       class="btn btn-info" target="_blank">  
-                        <i class="fas fa-print"></i> Imprimir Por Cabañas  
-                    </a>  
-                    <a href="imprimir_reporte.php?tipo=completo&year=<?php echo $year; ?>&semana_id=<?php echo $semana_id; ?>"   
-                       class="btn btn-warning" target="_blank">  
-                        <i class="fas fa-print"></i> Imprimir Reporte Completo  
-                    </a>  
-                </div>      
-            </div>  
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="imprimir_reporte.php?tipo=general&year=<?= $year ?>&semana_id=<?= $semana_id ?>"
+                       class="btn btn-success" target="_blank">
+                        <i class="fas fa-print"></i> Reporte General
+                    </a>
+                    <a href="imprimir_reporte.php?tipo=cabanas&year=<?= $year ?>&semana_id=<?= $semana_id ?>"
+                       class="btn btn-info" target="_blank">
+                        <i class="fas fa-print"></i> Reporte por Cabañas
+                    </a>
+                    <a href="imprimir_reporte.php?tipo=iglesia&year=<?= $year ?>&semana_id=<?= $semana_id ?>"
+                       class="btn btn-primary" target="_blank">
+                        <i class="fas fa-print"></i> Reporte por Iglesia
+                    </a>
+                    <a href="imprimir_reporte.php?tipo=individual&year=<?= $year ?>&semana_id=<?= $semana_id ?>"
+                       class="btn btn-warning" target="_blank">
+                        <i class="fas fa-print"></i> Reporte Individual
+                    </a>
+                    <a href="imprimir_reporte.php?tipo=completo&year=<?= $year ?>&semana_id=<?= $semana_id ?>"
+                       class="btn btn-secondary" target="_blank">
+                        <i class="fas fa-print"></i> Reporte Completo
+                    </a>
+                </div>
+            </div> 
         </div>  
     </div>  
 </div>  
@@ -764,4 +886,352 @@ $pct_f   = $totalAcampantes > 0 ? round(($total_f / $totalAcampantes) * 100) : 0
     </div>
 </div>
 
+<!-- ══ REPORTE POR IGLESIA ══ -->
+<?php if ($tipo_reporte === 'iglesia'): ?>
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center py-2 flex-wrap gap-2">
+        <h6 class="mb-0">
+            <i class="fas fa-church"></i> Distribución por Iglesia
+            <span class="badge bg-secondary ms-2"><?= count($porIglesia) ?> iglesias</span>
+        </h6>
+        <small class="text-muted">
+            <?= $semana_seleccionada
+                ? htmlspecialchars($semana_seleccionada['nombre'])
+                : "Campamento $year" ?>
+        </small>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0 align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>#</th>
+                        <th>Iglesia</th>
+                        <th class="text-center">Total</th>
+                        <th class="text-center"><i class="fas fa-mars text-primary"></i></th>
+                        <th class="text-center"><i class="fas fa-venus text-danger"></i></th>
+                        <th class="text-center">1ra vez</th>
+                        <th class="text-center">✝️</th>
+                        <th class="text-center">🙏</th>
+                        <th class="text-center">Sesiones</th>
+                        <th>Participación</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php
+                $max_igl = $porIglesia[0]['total'] ?? 1;
+                foreach ($porIglesia as $i => $igl):
+                    $pct_igl = $totalAcampantes > 0
+                        ? round(($igl['total'] / $totalAcampantes) * 100, 1) : 0;
+                    $pct_bar = $max_igl > 0
+                        ? round(($igl['total'] / $max_igl) * 100) : 0;
+                    $es_activa = $iglesia_filtro === $igl['iglesia'];
+                ?>
+                <tr class="<?= $es_activa ? 'table-primary' : '' ?>">
+                    <td class="text-muted small"><?= $i + 1 ?></td>
+                    <td><strong><?= htmlspecialchars($igl['iglesia']) ?></strong></td>
+                    <td class="text-center fw-bold"><?= $igl['total'] ?></td>
+                    <td class="text-center text-primary"><?= $igl['masculino'] ?></td>
+                    <td class="text-center text-danger"><?= $igl['femenino'] ?></td>
+                    <td class="text-center">
+                        <?= $igl['primera_vez'] > 0
+                            ? "<span class='badge bg-info'>{$igl['primera_vez']}</span>"
+                            : '<span class="text-muted">0</span>' ?>
+                    </td>
+                    <td class="text-center">
+                        <?= $igl['recibio_cristo'] > 0
+                            ? "<span class='badge bg-success'>{$igl['recibio_cristo']}</span>"
+                            : '<span class="text-muted">0</span>' ?>
+                    </td>
+                    <td class="text-center">
+                        <?= $igl['consagro_vida'] > 0
+                            ? "<span class='badge bg-warning text-dark'>{$igl['consagro_vida']}</span>"
+                            : '<span class="text-muted">0</span>' ?>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-secondary"><?= $igl['total_sesiones'] ?></span>
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center gap-1">
+                            <div class="progress flex-grow-1" style="height:8px;">
+                                <div class="progress-bar bg-primary"
+                                     style="width:<?= $pct_bar ?>%;"></div>
+                            </div>
+                            <small class="text-muted"><?= $pct_igl ?>%</small>
+                        </div>
+                    </td>
+                    <td>
+                        <!-- Ver detalle de esta iglesia -->
+                        <a href="?tipo=iglesia&semana_id=<?= $semana_id ?>&year=<?= $year ?>&iglesia_filtro=<?= urlencode($igl['iglesia']) ?>#detalle-iglesia"
+                           class="btn btn-sm <?= $es_activa ? 'btn-primary' : 'btn-outline-primary' ?>"
+                           title="Ver detalle">
+                            <i class="fas fa-users"></i>
+                        </a>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+                <tfoot class="table-light fw-bold">
+                    <tr>
+                        <td colspan="2">TOTAL</td>
+                        <td class="text-center"><?= $totalAcampantes ?></td>
+                        <td class="text-center text-primary"><?= $total_m ?></td>
+                        <td class="text-center text-danger"><?= $total_f ?></td>
+                        <td class="text-center">
+                            <?= array_sum(array_column($porIglesia, 'primera_vez')) ?>
+                        </td>
+                        <td class="text-center"><?= $impacto['recibio_cristo'] ?? 0 ?></td>
+                        <td class="text-center"><?= $impacto['consagro_vida'] ?? 0 ?></td>
+                        <td class="text-center"><?= $detalle_cons['total_sesiones'] ?? 0 ?></td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Detalle de iglesia seleccionada -->
+<?php if ($iglesia_filtro && !empty($acampantesPorIglesia)): ?>
+<div id="detalle-iglesia"></div>
+<div class="card mb-4 border-primary">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h6 class="mb-0">
+            <i class="fas fa-church"></i>
+            Detalle: <?= htmlspecialchars($iglesia_filtro) ?>
+            <span class="badge bg-light text-primary ms-2"><?= count($acampantesPorIglesia) ?> acampantes</span>
+        </h6>
+        <div class="d-flex gap-2">
+            <a href="imprimir_reporte.php?tipo=iglesia_detalle&semana_id=<?= $semana_id ?>&year=<?= $year ?>&iglesia_filtro=<?= urlencode($iglesia_filtro) ?>"
+               class="btn btn-sm btn-light" target="_blank">
+                <i class="fas fa-print"></i> Imprimir
+            </a>
+            <a href="?tipo=iglesia&semana_id=<?= $semana_id ?>&year=<?= $year ?>"
+               class="btn btn-sm btn-outline-light">
+                <i class="fas fa-times"></i> Cerrar
+            </a>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0 align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Nombre</th>
+                        <th class="text-center">Edad</th>
+                        <th class="text-center">Sexo</th>
+                        <th>Cabaña</th>
+                        <th>Temas tratados</th>
+                        <th class="text-center">¿Creyó/ya creía?</th>
+                        <th class="text-center">Consagración</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($acampantesPorIglesia as $ac): ?>
+                <tr>
+                    <td>
+                        <strong><?= htmlspecialchars($ac['nombre']) ?></strong>
+                        <?php if ($ac['primera_vez_campamento']): ?>
+                            <span class="badge bg-info ms-1" style="font-size:9px;">1ra vez</span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="text-center"><?= $ac['edad'] ?? '-' ?></td>
+                    <td class="text-center">
+                        <?php if ($ac['sexo'] === 'masculino'): ?>
+                            <i class="fas fa-mars text-primary"></i>
+                        <?php else: ?>
+                            <i class="fas fa-venus text-danger"></i>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if ($ac['nombre_cabana']): ?>
+                            <span class="badge bg-secondary">
+                                <?= htmlspecialchars($ac['nombre_cabana']) ?>
+                            </span>
+                        <?php else: ?>
+                            <span class="text-muted small">Sin asignar</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if ($ac['temas_tratados']): ?>
+                            <small class="text-muted">
+                                <?= htmlspecialchars($ac['temas_tratados']) ?>
+                            </small>
+                        <?php else: ?>
+                            <span class="text-muted small">
+                                <i class="fas fa-minus"></i> Sin sesiones
+                            </span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="text-center">
+                        <?php if ($ac['recibio_cristo_semana']): ?>
+                            <span class="badge bg-success">
+                                <i class="fas fa-cross"></i> Creyó esta semana
+                            </span>
+                        <?php elseif ($ac['era_creyente_antes']): ?>
+                            <span class="badge bg-primary">
+                                <i class="fas fa-check"></i> Ya creía
+                            </span>
+                        <?php else: ?>
+                            <span class="text-muted small">No registrado</span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="text-center">
+                        <?php if ($ac['consagro_vida_fogata']): ?>
+                            <span class="badge bg-warning text-dark">
+                                <i class="fas fa-fire"></i> Sí
+                            </span>
+                        <?php else: ?>
+                            <span class="text-muted small">No</span>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<?php elseif ($iglesia_filtro && empty($acampantesPorIglesia)): ?>
+<div class="alert alert-warning">
+    <i class="fas fa-exclamation-triangle"></i>
+    No se encontraron acampantes para <strong><?= htmlspecialchars($iglesia_filtro) ?></strong>.
+</div>
+<?php endif; ?>
+
+<!-- ══ REPORTE INDIVIDUAL ══ -->
+<?php elseif ($tipo_reporte === 'individual'): ?>
+<div class="card mb-4">
+    <div class="card-header py-2">
+        <h6 class="mb-0">
+            <i class="fas fa-user"></i> Reporte Individual de Acampantes
+        </h6>
+    </div>
+    <div class="card-body border-bottom">
+        <form method="GET" class="row g-2">
+            <input type="hidden" name="tipo"      value="individual">
+            <input type="hidden" name="semana_id" value="<?= $semana_id ?>">
+            <input type="hidden" name="year"      value="<?= $year ?>">
+            <div class="col-12 col-md-4">
+                <input type="text" class="form-control" name="search_ind"
+                       placeholder="Buscar por nombre o iglesia..."
+                       value="<?= htmlspecialchars($search_individual) ?>">
+            </div>
+            <div class="col-12 col-md-3">
+                <select name="cabana_id_ind" class="form-select">
+                    <option value="">Todas las cabañas</option>
+                    <?php foreach ($cabanasLista as $cab): ?>
+                    <option value="<?= $cab['id'] ?>"
+                            <?= $cabana_id_individual == $cab['id'] ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($cab['nombre_cabana']) ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-search"></i> Buscar
+                </button>
+            </div>
+            <div class="col-6 col-md-2">
+                <a href="reportes.php?tipo=individual&semana_id=<?= $semana_id ?>"
+                   class="btn btn-secondary w-100">
+                    <i class="fas fa-times"></i> Limpiar
+                </a>
+            </div>
+        </form>
+    </div>
+    <?php if (empty($acampantesIndividual)): ?>
+    <div class="card-body text-center text-muted py-4">
+        <i class="fas fa-user fa-3x opacity-25 d-block mb-2"></i>
+        Usa los filtros para buscar acampantes.
+    </div>
+    <?php else: ?>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0 align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Acampante</th>
+                        <th>Edad</th>
+                        <th>Iglesia</th>
+                        <th>Cabaña</th>
+                        <th class="text-center">Sesiones</th>
+                        <th class="text-center">✝️</th>
+                        <th class="text-center">🙏</th>
+                        <th class="text-center">1ra vez</th>
+                        <th>Última sesión</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($acampantesIndividual as $ac):
+                    $eqData   = $equipos_config[$ac['equipo'] ?? ''] ?? null;
+                    $hexEq    = $eqData['color_hex'] ?? '#6c757d';
+                    $sesColor = $ac['total_sesiones'] >= 3 ? 'success'
+                        : ($ac['total_sesiones'] >= 1 ? 'warning' : 'danger');
+                ?>
+                <tr>
+                    <td>
+                        <div class="fw-semibold"><?= htmlspecialchars($ac['nombre']) ?></div>
+                        <small class="text-muted">
+                            <i class="fas fa-<?= $ac['sexo'] === 'masculino'
+                                ? 'mars text-primary' : 'venus text-danger' ?>"></i>
+                            <?= ucfirst($ac['sexo'] ?? '') ?>
+                        </small>
+                    </td>
+                    <td><?= $ac['edad'] ?? '-' ?></td>
+                    <td class="small text-muted"><?= htmlspecialchars($ac['iglesia'] ?? '-') ?></td>
+                    <td>
+                        <?php if ($ac['nombre_cabana']): ?>
+                            <span class="badge text-white"
+                                  style="background-color:<?= $hexEq ?>; font-size:11px;">
+                                <?= htmlspecialchars($ac['nombre_cabana']) ?>
+                            </span>
+                        <?php else: ?>
+                            <span class="text-muted small">Sin asignar</span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-<?= $sesColor ?>"><?= $ac['total_sesiones'] ?>/3</span>
+                    </td>
+                    <td class="text-center">
+                        <?= $ac['recibio_cristo_semana']
+                            ? '<i class="fas fa-check text-success"></i>'
+                            : '<span class="text-muted">-</span>' ?>
+                    </td>
+                    <td class="text-center">
+                        <?= $ac['consagro_vida_fogata']
+                            ? '<i class="fas fa-check text-warning"></i>'
+                            : '<span class="text-muted">-</span>' ?>
+                    </td>
+                    <td class="text-center">
+                        <?= $ac['primera_vez_campamento']
+                            ? '<span class="badge bg-info">Sí</span>'
+                            : '<span class="text-muted small">No</span>' ?>
+                    </td>
+                    <td class="small text-muted">
+                        <?= $ac['ultima_sesion']
+                            ? date('d/m/Y', strtotime($ac['ultima_sesion']))
+                            : '<span class="text-danger small">Sin sesiones</span>' ?>
+                    </td>
+                    <td>
+                        <a href="ver_acampante.php?id=<?= $ac['id'] ?>&semana_id=<?= $semana_id ?>"
+                           class="btn btn-sm btn-outline-info">
+                            <i class="fas fa-eye"></i>
+                        </a>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <div class="p-2 text-muted small border-top">
+            <?= count($acampantesIndividual) ?> acampante(s) encontrado(s)
+        </div>
+    </div>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
 <?php include '../includes/footer.php'; ?>

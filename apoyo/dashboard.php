@@ -74,23 +74,43 @@ try {
     // ⭐ Acampantes por cabaña con equipo - filtrado por género
     if ($semana_id_activa) {
         $sql_cab = "SELECT c.id, c.nombre_cabana, c.capacidad_maxima, c.genero, c.equipo,
-                    COUNT(a.id) as total_acampantes
+                    MAX(CASE WHEN cs.rol = 'principal'  THEN cs.nombre_consejero END) AS consejero_principal,
+                    MAX(CASE WHEN cs.rol = 'asistente'  THEN cs.nombre_consejero END) AS consejero_asistente,
+                    COALESCE(csc.edad_min, s.edad_min) AS edad_min_efectiva,
+                    COALESCE(csc.edad_max, s.edad_max) AS edad_max_efectiva,
+                    COUNT(DISTINCT a.id) as total_acampantes
                     FROM cabanas c
                     LEFT JOIN acampantes a ON c.id = a.cabana_id 
                         AND a.semana_id = ? AND a.estado = 'activo'
+                    LEFT JOIN consejeros_semana cs
+                        ON cs.cabana_id = c.id AND cs.semana_id = ?
+                    LEFT JOIN cabana_semana_config csc 
+                        ON csc.cabana_id = c.id AND csc.semana_id = ?
+                    LEFT JOIN semanas_campamento s ON s.id = ?
                     WHERE c.activa = 1 $where_genero_cab
-                    GROUP BY c.id, c.nombre_cabana, c.capacidad_maxima, c.genero, c.equipo
+                    GROUP BY c.id, c.nombre_cabana, c.capacidad_maxima, c.genero, c.equipo,
+                             edad_min_efectiva, edad_max_efectiva
                     ORDER BY c.equipo ASC, c.nombre_cabana ASC";
         $stmt = $pdo->prepare($sql_cab);
-        $stmt->execute([$semana_id_activa]);
+        $stmt->execute([
+            $semana_id_activa,
+            $semana_id_activa,
+            $semana_id_activa,
+            $semana_id_activa
+        ]);
     } else {
         $sql_cab = "SELECT c.id, c.nombre_cabana, c.capacidad_maxima, c.genero, c.equipo,
-                    COUNT(a.id) as total_acampantes
+                    c.consejero_principal,
+                    c.consejero_asistente,
+                    NULL AS edad_min_efectiva,
+                    NULL AS edad_max_efectiva,
+                    COUNT(DISTINCT a.id) as total_acampantes
                     FROM cabanas c
                     LEFT JOIN acampantes a ON c.id = a.cabana_id 
                         AND a.year_campamento = ? AND a.estado = 'activo'
                     WHERE c.activa = 1 $where_genero_cab
-                    GROUP BY c.id, c.nombre_cabana, c.capacidad_maxima, c.genero, c.equipo
+                    GROUP BY c.id, c.nombre_cabana, c.capacidad_maxima, c.genero, c.equipo,
+                             c.consejero_principal, c.consejero_asistente
                     ORDER BY c.equipo ASC, c.nombre_cabana ASC";
         $stmt = $pdo->prepare($sql_cab);
         $stmt->execute([obtenerAnioCampamento()]);
@@ -152,6 +172,22 @@ try {
         $stmt->execute([obtenerAnioCampamento()]);
     }
     $statsPorEquipo = $stmt->fetchAll();
+    
+    // Acampantes en sala de espera (check-in hecho, pendientes de ser voceados)
+    $en_espera_count = 0;
+    if ($semana_id_activa) {
+        $sql_espera = "SELECT COUNT(*) as total
+                       FROM acampantes a
+                       JOIN cabanas c ON a.cabana_id = c.id
+                       WHERE a.semana_id = ?
+                         AND a.estado = 'activo'
+                         AND a.llego = 1
+                         AND a.enviado_cabana = 0
+                         $where_genero_cab";
+        $stmt = $pdo->prepare($sql_espera);
+        $stmt->execute([$semana_id_activa]);
+        $en_espera_count = $stmt->fetch()['total'];
+    }
 
 } catch (Exception $e) {
     $error = "Error: " . $e->getMessage();
@@ -224,7 +260,7 @@ include '../includes/header.php';
                 <i class="fas fa-users mb-2"></i>
                 <h3 id="total-acampantes"><?php echo $totalAcampantes; ?></h3>
                 <p class="mb-0">Acampantes Registrados</p>
-                <small class="text-muted"><?php echo $semana_activa ? 'Esta semana' : 'Este año'; ?></small>
+                <small class=".text-muted-w"><?php echo $semana_activa ? 'Esta semana' : 'Este año'; ?></small>
             </div>
         </div>
     </div>
@@ -243,7 +279,7 @@ include '../includes/header.php';
                 <i class="fas fa-user-plus mb-2"></i>
                 <h3><?php echo count($ultimosAcampantes); ?></h3>
                 <p class="mb-0">Últimos Registros</p>
-                <small class="text-muted">Recientes</small>
+                <small class=".text-muted-w">Recientes</small>
             </div>
         </div>
     </div>
@@ -473,6 +509,42 @@ include '../includes/header.php';
                                         </small>
                                         <small class="text-muted"><?php echo round($pct, 0); ?>%</small>
                                     </div>
+                                    <!-- Consejeros -->
+                                    <div class="mt-2 pt-2 border-top">
+                                        <?php if ($cab['consejero_principal']): ?>
+                                        <div class="d-flex align-items-center gap-1 mb-1">
+                                            <i class="fas fa-user-tie text-secondary"
+                                               style="font-size:11px; width:14px;"></i>
+                                            <small class="text-muted" style="font-size:11px;">
+                                                <?= htmlspecialchars($cab['consejero_principal']) ?>
+                                            </small>
+                                        </div>
+                                        <?php endif; ?>
+                                        <?php if ($cab['consejero_asistente']): ?>
+                                        <div class="d-flex align-items-center gap-1 mb-1">
+                                            <i class="fas fa-user text-secondary"
+                                               style="font-size:11px; width:14px;"></i>
+                                            <small class="text-muted" style="font-size:11px;">
+                                                <?= htmlspecialchars($cab['consejero_asistente']) ?>
+                                            </small>
+                                        </div>
+                                        <?php endif; ?>
+                                        <!-- Rango de edad -->
+                                        <?php
+                                        $emin = $cab['edad_min_efectiva'];
+                                        $emax = $cab['edad_max_efectiva'];
+                                        if ($emin !== null || $emax !== null):
+                                        ?>
+                                        <div class="d-flex align-items-center gap-1">
+                                            <i class="fas fa-birthday-cake text-info"
+                                               style="font-size:11px; width:14px;"></i>
+                                            <small class="text-info fw-semibold"
+                                                   style="font-size:11px;">
+                                                <?= $emin ?? '—' ?> – <?= $emax ?? '—' ?> años
+                                            </small>
+                                        </div>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
                                 <div class="card-footer py-1 px-3 bg-transparent">
                                     <a href="lista_acampantes.php?cabana_id=<?php echo $cab['id']; ?>"
@@ -551,6 +623,21 @@ include '../includes/header.php';
                     <a href="estadisticas.php" class="btn btn-info">
                         <i class="fas fa-chart-bar"></i> Ver Estadísticas
                     </a>
+                    <a href="sala_espera.php"
+                       class="btn <?= $en_espera_count > 0 ? 'btn-warning' : 'btn-outline-secondary' ?>
+                                  d-flex justify-content-between align-items-center">
+                        <span>
+                            <i class="fas fa-bullhorn"></i> Sala de Espera
+                        </span>
+                        <?php if ($en_espera_count > 0): ?>
+                            <span class="badge bg-dark ms-2"><?= $en_espera_count ?></span>
+                        <?php else: ?>
+                            <span class="badge bg-success ms-2">
+                                <i class="fas fa-check"></i>
+                            </span>
+                        <?php endif; ?>
+                    </a>
+                    
                 </div>
 
                 <!-- Resumen numérico -->
@@ -749,6 +836,26 @@ function renderCabanas(cabanas) {
                             </small>
                             <small class="text-muted">${Math.round(pct)}%</small>
                         </div>
+                        ${(cab.consejero_principal || cab.consejero_asistente || cab.edad_min_efectiva != null || cab.edad_max_efectiva != null)
+                            ? `<div class="mt-2 pt-2 border-top">
+                                ${cab.consejero_principal
+                                    ? `<div class="d-flex align-items-center gap-1 mb-1">
+                                        <i class="fas fa-user-tie text-secondary" style="font-size:11px; width:14px;"></i>
+                                        <small class="text-muted" style="font-size:11px;">${cab.consejero_principal}</small>
+                                       </div>` : ''}
+                                ${cab.consejero_asistente
+                                    ? `<div class="d-flex align-items-center gap-1 mb-1">
+                                        <i class="fas fa-user text-secondary" style="font-size:11px; width:14px;"></i>
+                                        <small class="text-muted" style="font-size:11px;">${cab.consejero_asistente}</small>
+                                       </div>` : ''}
+                                ${(cab.edad_min_efectiva != null || cab.edad_max_efectiva != null)
+                                    ? `<div class="d-flex align-items-center gap-1">
+                                        <i class="fas fa-birthday-cake text-info" style="font-size:11px; width:14px;"></i>
+                                        <small class="text-info fw-semibold" style="font-size:11px;">
+                                            ${cab.edad_min_efectiva ?? '—'} – ${cab.edad_max_efectiva ?? '—'} años
+                                        </small>
+                                       </div>` : ''}
+                               </div>` : ''}
                     </div>
                     <div class="card-footer py-1 px-3 bg-transparent">
                         <a href="lista_acampantes.php?cabana_id=${cab.id}"

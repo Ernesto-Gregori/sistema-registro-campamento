@@ -95,6 +95,10 @@ a:hover {
     color: var(--wol-mid-blue);
     text-decoration: underline;
 }
+
+.text-muted-w {
+    color: var(--wol-white);
+}
 /* ══════════════════════════════════════════════════════════════
    3. NAVBAR
 ══════════════════════════════════════════════════════════════ */

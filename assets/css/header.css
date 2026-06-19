@@ -196,14 +196,12 @@ font-weight: 700;
 letter-spacing: 0.3px;
 }
 
-/* Colores del rol-badge */
-.rol-badge-encargado    { background-color: var(--wol-orange);     color: var(--wol-white); }
-.rol-badge-consejero{ background-color: var(--wol-light-blue); color: var(--wol-dark-blue); }
-.rol-badge-apoyo    { background-color: var(--wol-green);      color: var(--wol-white); }
-.rol-badge-admin {
-    background: rgba(220, 53, 69, 0.15);
-    color: #dc3545;
-    border: 1px solid rgba(220, 53, 69, 0.3);
+/* ══════════════════════════════════════════════════════
+   ROL BADGES — uno por cada valor del ENUM
+══════════════════════════════════════════════════════ */
+
+/* Base compartida para todos los rol-badge */
+.rol-badge {
     font-size: 0.65rem;
     padding: 2px 7px;
     border-radius: 20px;
@@ -211,19 +209,60 @@ letter-spacing: 0.3px;
     letter-spacing: 0.3px;
 }
 
+/* Administrador */
+.rol-badge-admin {
+    background: rgba(220, 53, 69, 0.15);
+    color: #dc3545;
+    border: 1px solid rgba(220, 53, 69, 0.3);
+}
+
+/* Encargado de Consejeros */
+.rol-badge-encargado {
+    background-color: var(--wol-orange, #f07d00);
+    color: var(--wol-white, #fff);
+    border: 1px solid transparent;
+}
+
+/* Consejero */
+.rol-badge-consejero {
+    background-color: var(--wol-light-blue, #73d1f5);
+    color: var(--wol-dark-blue, #004f68);
+    border: 1px solid transparent;
+}
+
+/* Apoyo */
+.rol-badge-apoyo {
+    background-color: var(--wol-green, #198754);
+    color: var(--wol-white, #fff);
+    border: 1px solid transparent;
+}
+
+/* Admisiones (rol: admisiones) */
 .rol-badge-admisiones {
     background: rgba(13, 202, 240, 0.15);
     color: #0dcaf0;
     border: 1px solid rgba(13, 202, 240, 0.3);
-    font-size: 0.65rem;
-    padding: 2px 7px;
-    border-radius: 20px;
-    font-weight: 600;
-    letter-spacing: 0.3px;
 }
+
+/* Administración / Caja (rol: administracion) */
 .rol-badge-administracion {
-    background-color: #198754;   /* verde Bootstrap success */
-    color: #fff;
+    background: rgba(25, 135, 84, 0.15);
+    color: #198754;
+    border: 1px solid rgba(25, 135, 84, 0.3);
+}
+
+/* Dirección de Campamento (rol: direccion_campamento) */
+.rol-badge-direccion {
+    background: rgba(0, 79, 104, 0.15);
+    color: #004f68;
+    border: 1px solid rgba(0, 79, 104, 0.35);
+}
+
+/* Fallback genérico para roles no mapeados */
+.rol-badge-default {
+    background: rgba(108, 117, 125, 0.15);
+    color: #6c757d;
+    border: 1px solid rgba(108, 117, 125, 0.3);
 }
 
 /* ── Semana pill ── */

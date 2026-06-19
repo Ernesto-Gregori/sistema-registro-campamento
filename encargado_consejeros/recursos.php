@@ -456,11 +456,11 @@ include '../includes/header.php';
             <div class="card border-secondary mb-3">
                 <div class="card-header bg-secondary bg-opacity-10
                             d-flex justify-content-between align-items-center py-2">
-                    <h6 class="mb-0 text-secondary">
+                    <h6 class="mb-0">
                         <i class="fas fa-calendar-alt"></i> Año <?php echo $anio; ?>
                         <span class="badge bg-secondary ms-1"><?php echo count($lista); ?></span>
                     </h6>
-                    <small class="text-muted">
+                    <small class="text-muted-w">
                         <?php echo count(array_filter($lista, fn($r) => $r['activo'])); ?> activo(s)
                     </small>
                 </div>

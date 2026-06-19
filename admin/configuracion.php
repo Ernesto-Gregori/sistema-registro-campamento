@@ -269,7 +269,145 @@ include '../includes/header.php';
             
                 </div>
             </div>
+            
+                        <!-- Configuración del campamento -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-globe-americas"></i> Configuración del Campamento
+                    </h5>
+                </div>
+                <div class="card-body">
 
+                    <!-- País -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-flag"></i> País
+                        </label>
+                        <select class="form-select" name="pais" id="selectPais"
+                                onchange="actualizarDivision(this.value)">
+                            <?php
+                            $pais_actual = $cfg['pais']['valor'] ?? 'El Salvador';
+                            $paises_lista = [
+                                'El Salvador','Guatemala','Honduras','Nicaragua',
+                                'Costa Rica','Panamá','México','Colombia','Venezuela',
+                                'Perú','Chile','Argentina','Ecuador','Bolivia',
+                                'Paraguay','Uruguay','Cuba','República Dominicana',
+                            ];
+                            foreach ($paises_lista as $p):
+                            ?>
+                            <option value="<?= htmlspecialchars($p) ?>"
+                                <?= $pais_actual === $p ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($p) ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small class="text-muted">
+                            Determina los estados/departamentos disponibles al registrar acampantes
+                        </small>
+                    </div>
+
+                    <!-- División territorial (se actualiza automáticamente) -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-map-marked-alt"></i> División Territorial
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="fas fa-layer-group"></i>
+                            </span>
+                            <input type="text" class="form-control" id="campoDivision"
+                                   name="division_territorial" readonly
+                                   value="<?= htmlspecialchars($cfg['division_territorial']['valor'] ?? 'Departamento') ?>">
+                        </div>
+                        <small class="text-muted">
+                            Se actualiza automáticamente al cambiar el país
+                        </small>
+                    </div>
+
+                    <hr>
+
+                    <!-- Nombre del campamento -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-campground"></i> Nombre del Campamento
+                        </label>
+                        <input type="text" class="form-control" name="nombre_campamento"
+                               value="<?= htmlspecialchars($cfg['nombre_campamento']['valor'] ?? '') ?>"
+                               placeholder="Ej: Campamento Palabra de Vida">
+                    </div>
+
+                    <!-- Año activo -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-calendar"></i> Año Activo
+                        </label>
+                        <input type="number" class="form-control" name="anio_activo"
+                               min="2020" max="2099"
+                               value="<?= htmlspecialchars($cfg['anio_activo']['valor'] ?? date('Y')) ?>">
+                        <small class="text-muted">
+                            Año que se usa para filtrar registros sin semana específica
+                        </small>
+                    </div>
+
+                    <hr>
+
+                    <!-- Configuración de operación -->
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-bed"></i> Capacidad Default de Cabañas
+                            </label>
+                            <input type="number" class="form-control" name="capacidad_default"
+                                   min="1" max="200"
+                                   value="<?= htmlspecialchars($cfg['capacidad_default']['valor'] ?? '15') ?>">
+                            <small class="text-muted">
+                                Capacidad sugerida al crear una cabaña nueva
+                            </small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-comments"></i> Meta de Sesiones por Consejero
+                            </label>
+                            <input type="number" class="form-control" name="sesiones_meta"
+                                   min="1" max="50"
+                                   value="<?= htmlspecialchars($cfg['sesiones_meta']['valor'] ?? '3') ?>">
+                            <small class="text-muted">
+                                Número objetivo de sesiones de consejería
+                            </small>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <!-- Color primario -->
+                    <div class="mb-0">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-palette"></i> Color Primario
+                        </label>
+                        <div class="input-group">
+                            <input type="color" class="form-control form-control-color"
+                                   id="colorPicker"
+                                   value="<?= htmlspecialchars($cfg['color_primario']['valor'] ?? '#004f68') ?>"
+                                   onchange="actualizarColorHex(this.value)">
+                            <input type="text" class="form-control" id="colorHex"
+                                   name="color_primario"
+                                   value="<?= htmlspecialchars($cfg['color_primario']['valor'] ?? '#004f68') ?>"
+                                   placeholder="#004f68"
+                                   oninput="actualizarColorPicker(this.value)">
+                            <button type="button" class="btn btn-outline-secondary"
+                                    onclick="document.getElementById('colorHex').value='#004f68';
+                                             document.getElementById('colorPicker').value='#004f68';">
+                                <i class="fas fa-undo"></i> Reset
+                            </button>
+                        </div>
+                        <small class="text-muted">
+                            Solo visual, no aplica CSS en tiempo real en esta versión
+                        </small>
+                    </div>
+
+                </div>
+            </div>
         </div>
 
         <!-- ── Columna derecha ── -->

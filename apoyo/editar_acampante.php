@@ -40,11 +40,26 @@ try {
     $error = "Error: " . $e->getMessage();
 }
 
-// Obtener cabañas con ocupación por semana
-$stmt = $pdo->query("SELECT c.*,
-                     (SELECT COUNT(*) FROM acampantes a 
-                      WHERE a.cabana_id = c.id AND a.estado = 'activo') as ocupados_total
-                     FROM cabanas c WHERE c.activa = 1 ORDER BY c.nombre_cabana");
+// Obtener genero_acceso del usuario actual
+$stmt_usr = $pdo->prepare("SELECT genero_acceso FROM usuarios WHERE id = ?");
+$stmt_usr->execute([$_SESSION['user_id']]);
+$genero_acceso_usuario = $stmt_usr->fetch()['genero_acceso'] ?? 'ambos';
+
+// Obtener cabañas filtradas por género de acceso del usuario
+if ($genero_acceso_usuario === 'ambos') {
+    $stmt = $pdo->query("SELECT c.*,
+                         (SELECT COUNT(*) FROM acampantes a 
+                          WHERE a.cabana_id = c.id AND a.estado = 'activo') as ocupados_total
+                         FROM cabanas c WHERE c.activa = 1 ORDER BY c.nombre_cabana");
+} else {
+    $stmt = $pdo->prepare("SELECT c.*,
+                           (SELECT COUNT(*) FROM acampantes a 
+                            WHERE a.cabana_id = c.id AND a.estado = 'activo') as ocupados_total
+                           FROM cabanas c 
+                           WHERE c.activa = 1 AND c.genero = ?
+                           ORDER BY c.nombre_cabana");
+    $stmt->execute([$genero_acceso_usuario]);
+}
 $cabanas = $stmt->fetchAll();
 
 // Conteos por semana para JS
