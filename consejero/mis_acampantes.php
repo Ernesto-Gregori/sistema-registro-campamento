@@ -237,21 +237,38 @@ include '../includes/header.php';
                             <?php echo $consejerias; ?>/3 Consejerías
                         </span>
                     </div>
-
-                    <div class="card-footer d-flex gap-2 p-2">
-                        <!-- Botón ver detalle (modal) -->
+                    
+                    <div class="card-footer p-2">
+                        <!-- Fila 1: ver detalle + consejería -->
+                        <div class="d-flex gap-2 mb-2">
+                            <button type="button"
+                                    class="btn btn-outline-secondary btn-sm flex-grow-1"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#modalAcampante"
+                                    onclick="abrirModal(<?php echo htmlspecialchars(json_encode($acampante)); ?>)">
+                                <i class="fas fa-eye"></i> Detalle
+                            </button>
+                            <a href="consejerias.php?acampante_id=<?php echo $acampante['id']; ?>"
+                               class="btn btn-primary btn-sm flex-grow-1">
+                                <i class="fas fa-plus"></i> Consejería
+                            </a>
+                        </div>
+                    
+                        <!-- Fila 2: botón toggle apoyo hora silenciosa -->
                         <button type="button"
-                                class="btn btn-outline-secondary btn-sm flex-grow-1"
-                                data-bs-toggle="modal"
-                                data-bs-target="#modalAcampante"
-                                onclick="abrirModal(<?php echo htmlspecialchars(json_encode($acampante)); ?>)">
-                            <i class="fas fa-eye"></i> Ver detalle
+                                id="btnApoyo_<?php echo $acampante['id']; ?>"
+                                class="btn btn-sm w-100
+                                    <?php echo $acampante['necesita_apoyo_silenciosa']
+                                        ? 'btn-warning' : 'btn-outline-warning'; ?>"
+                                onclick="toggleApoyoSilenciosa(<?php echo $acampante['id']; ?>)">
+                            <i class="fas
+                                <?php echo $acampante['necesita_apoyo_silenciosa'] ? 'fa-bell' : 'fa-bell-slash'; ?>"></i>
+                            <span id="textoApoyo_<?php echo $acampante['id']; ?>">
+                                <?php echo $acampante['necesita_apoyo_silenciosa']
+                                    ? 'Cancelar solicitud de apoyo'
+                                    : 'Pedir apoyo (hora silenciosa)'; ?>
+                            </span>
                         </button>
-                        <!-- Botón consejería -->
-                        <a href="consejerias.php?acampante_id=<?php echo $acampante['id']; ?>"   
-                           class="btn btn-primary btn-sm flex-grow-1">  
-                            <i class="fas fa-plus"></i> Consejería
-                        </a>  
                     </div>
                 </div>  
             </div>  
@@ -440,6 +457,73 @@ function abrirModal(a) {
     // Botón consejería
     document.getElementById('modalBtnConsejeria').href =
         'consejerias.php?acampante_id=' + a.id;
+}
+
+// ── Toggle apoyo en hora silenciosa ────────────────────────────
+function toggleApoyoSilenciosa(acampanteId) {
+    const btn   = document.getElementById('btnApoyo_' + acampanteId);
+    const texto = document.getElementById('textoApoyo_' + acampanteId);
+    if (!btn) return;
+
+    // Estado visual original para revertir si falla
+    const eraActivo = btn.classList.contains('btn-warning');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
+
+    fetch('toggle_apoyo_silenciosa.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'acampante_id=' + acampanteId
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            const activo = data.estado === 1;
+            // Actualizar botón
+            btn.classList.remove('btn-warning', 'btn-outline-warning');
+            btn.classList.add(activo ? 'btn-warning' : 'btn-outline-warning');
+            btn.innerHTML = (activo
+                ? '<i class="fas fa-bell"></i> <span>Cancelar solicitud de apoyo</span>'
+                : '<i class="fas fa-bell-slash"></i> <span>Pedir apoyo (hora silenciosa)</span>'
+            );
+
+            // Toast de confirmación
+            mostrarToast(activo
+                ? 'Solicitud de apoyo enviada para ' + data.acampante
+                : 'Solicitud cancelada para ' + data.acampante,
+                activo ? 'warning' : 'success');
+        } else {
+            alert('Error: ' + (data.error || 'desconocido'));
+            // Revertir
+            btn.classList.remove('btn-warning', 'btn-outline-warning');
+            btn.classList.add(eraActivo ? 'btn-warning' : 'btn-outline-warning');
+            btn.innerHTML = eraActivo
+                ? '<i class="fas fa-bell"></i> <span>Cancelar solicitud de apoyo</span>'
+                : '<i class="fas fa-bell-slash"></i> <span>Pedir apoyo (hora silenciosa)</span>';
+        }
+    })
+    .catch(err => {
+        alert('Error de conexión: ' + err.message);
+        btn.classList.remove('btn-warning', 'btn-outline-warning');
+        btn.classList.add(eraActivo ? 'btn-warning' : 'btn-outline-warning');
+        btn.innerHTML = eraActivo
+            ? '<i class="fas fa-bell"></i> <span>Cancelar solicitud de apoyo</span>'
+            : '<i class="fas fa-bell-slash"></i> <span>Pedir apoyo (hora silenciosa)</span>';
+    })
+    .finally(() => {
+        btn.disabled = false;
+    });
+}
+
+// ── Toast temporal ─────────────────────────────────────────────
+function mostrarToast(mensaje, tipo = 'success') {
+    const toast = document.createElement('div');
+    toast.className = 'position-fixed bottom-0 end-0 m-3 alert alert-' + tipo
+                      + ' py-2 px-3 shadow';
+    toast.style.zIndex = 9999;
+    toast.innerHTML = '<i class="fas fa-check-circle"></i> ' + mensaje;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
 }
 </script>
 

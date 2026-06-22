@@ -92,6 +92,38 @@ try {
         $stmt->execute([obtenerAnioCampamento()]);
     }
         $ultimosAcampantes = $stmt->fetchAll();
+        
+    // Acampantes que necesitan apoyo en hora silenciosa
+    try {
+        if ($semana_id_activa) {
+            $stmt = $pdo->prepare("
+                SELECT a.id, a.nombre, a.sexo,
+                       c.nombre_cabana, c.equipo
+                FROM acampantes a
+                LEFT JOIN cabanas c ON a.cabana_id = c.id
+                WHERE a.semana_id = ?
+                  AND a.estado = 'activo'
+                  AND a.necesita_apoyo_silenciosa = 1
+                ORDER BY a.nombre
+            ");
+            $stmt->execute([$semana_id_activa]);
+        } else {
+            $stmt = $pdo->prepare("
+                SELECT a.id, a.nombre, a.sexo,
+                       c.nombre_cabana, c.equipo
+                FROM acampantes a
+                LEFT JOIN cabanas c ON a.cabana_id = c.id
+                WHERE a.year_campamento = ?
+                  AND a.estado = 'activo'
+                  AND a.necesita_apoyo_silenciosa = 1
+                ORDER BY a.nombre
+            ");
+            $stmt->execute([obtenerAnioCampamento()]);
+        }
+        $acampantesNecesitanApoyo = $stmt->fetchAll();
+    } catch (Exception $eApoyo) {
+        $acampantesNecesitanApoyo = [];
+    }
 
     // Cabañas con id para agrupar por equipo — incluye consejeros y rango de edad
     if ($semana_id_activa) {
@@ -651,6 +683,78 @@ include '../includes/header.php';
                     </div>
                 </div>
                 <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- ═══ ALERTA: APOYO EN HORA SILENCIOSA ═══ -->
+<?php if (!empty($acampantesNecesitanApoyo)): ?>
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-warning shadow-sm">
+            <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-bell"></i> Solicitudes de Apoyo en Hora Silenciosa
+                </h5>
+                <span class="badge bg-dark rounded-pill">
+                    <?php echo count($acampantesNecesitanApoyo); ?> pendiente(s)
+                </span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Acampante</th>
+                                <th>Cabaña</th>
+                                <th class="text-center">Equipo</th>
+                                <th class="text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($acampantesNecesitanApoyo as $apoyo):
+                                $eqData  = $equipos_config[$apoyo['equipo']] ?? null;
+                                $hexEq   = $eqData['color_hex'] ?? '#6c757d';
+                                $emojiEq = $eqData['emoji']     ?? '⚪';
+                                $labelEq = $eqData['nombre']    ?? ucfirst($apoyo['equipo'] ?? '—');
+                            ?>
+                            <tr>
+                                <td>
+                                    <i class="fas fa-<?php echo $apoyo['sexo'] === 'masculino' ? 'mars text-primary' : 'venus text-danger'; ?>"></i>
+                                    <strong><?php echo htmlspecialchars($apoyo['nombre']); ?></strong>
+                                </td>
+                                <td>
+                                    <i class="fas fa-home text-muted"></i>
+                                    <?php echo htmlspecialchars($apoyo['nombre_cabana'] ?? 'Sin asignar'); ?>
+                                </td>
+                                <td class="text-center">
+                                    <?php if ($apoyo['equipo']): ?>
+                                    <span class="badge"
+                                          style="background-color: <?php echo $hexEq; ?>;">
+                                        <?php echo $emojiEq; ?> <?php echo htmlspecialchars($labelEq); ?>
+                                    </span>
+                                    <?php else: ?>
+                                    <span class="text-muted small">—</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="text-center">
+                                    <a href="acampantes.php?action=view&id=<?php echo $apoyo['id']; ?>"
+                                       class="btn btn-sm btn-outline-warning"
+                                       title="Ver información del acampante">
+                                        <i class="fas fa-eye"></i> Ver
+                                    </a>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer bg-light small text-muted">
+                <i class="fas fa-info-circle"></i>
+                El consejero puede cancelar la solicitud desde su vista de acampantes.
             </div>
         </div>
     </div>
