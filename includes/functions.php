@@ -78,6 +78,22 @@ function esDireccion() {
     return isset($_SESSION['rol']) && $_SESSION['rol'] === 'direccion_campamento';
 }
 
+// =====================================================================
+// MÓDULO EQUIPO (Equipantes)
+// =====================================================================
+
+function esEquipo(): bool {
+    return isset($_SESSION['rol']) && $_SESSION['rol'] === 'equipo';
+}
+
+// Acceso al panel de equipo: rol equipo O administrador
+function esEquipoOAdmin(): bool {
+    return isset($_SESSION['rol']) && in_array($_SESSION['rol'], [
+        'equipo',
+        'administrador'
+    ], true);
+}
+
 // ── Verificador genérico de rol (para roles sin función propia) ──
 function esRol(string $rol): bool {
     return isset($_SESSION['rol']) && $_SESSION['rol'] === $rol;
@@ -433,6 +449,65 @@ function validarEdadAcampante(
         ];
 
     return ['valido' => true, 'mensaje' => ''];
+}
+
+/**
+ * Sanitiza texto para evitar XSS e inyecciones en formularios.
+ */
+function limpiarEquipo($valor) {
+    if ($valor === null) return null;
+    $valor = trim($valor);
+    $valor = stripslashes($valor);
+    $valor = htmlspecialchars($valor, ENT_QUOTES, 'UTF-8');
+    return $valor;
+}
+
+/**
+ * Obtiene todos los roles asignados a un usuario.
+ * Retorna array de strings: ['administrador', 'encargado_consejeros']
+ */
+function obtenerRolesUsuario(PDO $pdo, int $usuario_id): array {
+    $stmt = $pdo->prepare("
+        SELECT rol, es_principal
+        FROM usuario_roles
+        WHERE usuario_id = ?
+        ORDER BY es_principal DESC, rol ASC
+    ");
+    $stmt->execute([$usuario_id]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $roles = [];
+    foreach ($rows as $r) {
+        $roles[] = $r['rol'];
+    }
+    return $roles;
+}
+
+/**
+ * Obtiene el rol principal (es_principal = 1) de un usuario.
+ * Si no tiene marcado ninguno, retorna el primero que encuentre.
+ */
+function obtenerRolPrincipal(PDO $pdo, int $usuario_id): ?string {
+    $stmt = $pdo->prepare("
+        SELECT rol FROM usuario_roles
+        WHERE usuario_id = ? AND es_principal = 1
+        LIMIT 1
+    ");
+    $stmt->execute([$usuario_id]);
+    $rol = $stmt->fetchColumn();
+
+    if (!$rol) {
+        // Fallback: el primer rol que tenga
+        $stmt2 = $pdo->prepare("
+            SELECT rol FROM usuario_roles
+            WHERE usuario_id = ?
+            ORDER BY id ASC LIMIT 1
+        ");
+        $stmt2->execute([$usuario_id]);
+        $rol = $stmt2->fetchColumn() ?: null;
+    }
+
+    return $rol ?: null;
 }
 ?>
 

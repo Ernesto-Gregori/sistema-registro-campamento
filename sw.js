@@ -6,7 +6,7 @@
    - Estrategia: siempre red primero, caché como fallback
 ═══════════════════════════════════════════════════════════════ */
 
-const SW_VERSION    = 'pv-camp-v2.1';
+const SW_VERSION    = 'pv-camp-v2.3';
 const CACHE_STATIC  = `${SW_VERSION}-static`;
 const CACHE_DYNAMIC = `${SW_VERSION}-dynamic`;
 
@@ -98,6 +98,9 @@ self.addEventListener('activate', event => {
 
 /* ── FETCH — UN SOLO LISTENER ── */
 self.addEventListener('fetch', event => {
+    if (event.request.url.includes('cambiar_rol.php')) {
+        return; // No interceptar, dejar que el navegador haga la petición normal
+    }
     const { request } = event;
     const url = new URL(request.url);
 

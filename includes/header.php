@@ -26,7 +26,7 @@
     <link rel="apple-touch-icon" href="/assets/img/icon-192.png">
 
     <!-- Offline Sync -->
-    <script src="/assets/js/offline-sync.js?v=3" defer></script>
+    <script src="/assets/js/offline-sync.js?v=4" defer></script>
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 </head>
@@ -57,7 +57,8 @@ $_esEncargado       = esEncargadoConsejeros();
 $_esConsejero       = esConsejero();
 $_esApoyo           = esApoyo();
 $_esAdmisiones      = esAdmisiones();
-$_esAdministracion  = esAdministracion();  
+$_esAdministracion  = esAdministracion(); 
+$_esEquipo          = esEquipo();
 
 // ── Label y badge según rol ─────────────────────────────────
 $_rolLabel =
@@ -66,8 +67,9 @@ $_rolLabel =
    ($_esConsejero      ? 'Consejero'           :
    ($_esAdmisiones     ? 'Admisiones'          :
    ($_esAdministracion ? 'Administración'      :
+   ($_esEquipo ? 'Equipo'                      :
    (esRol('direccion_campamento') ? 'Dirección' :
-                         'Apoyo')))));
+                         'Apoyo'))))));
 
 $_rolBadgeClass =
     $_esAdmin          ? 'rol-badge-admin'          :
@@ -75,8 +77,9 @@ $_rolBadgeClass =
    ($_esConsejero      ? 'rol-badge-consejero'      :
    ($_esAdmisiones     ? 'rol-badge-admisiones'     :
    ($_esAdministracion ? 'rol-badge-administracion' :
+   ($_esEquipo ? 'rol-badge-equipo'                 :
    (esRol('direccion_campamento') ? 'rol-badge-direccion' :
-                         'rol-badge-apoyo')))));
+                         'rol-badge-apoyo'))))));
 
 // ── Dashboard home según rol ────────────────────────────────
 $_dashboardHome =
@@ -85,7 +88,23 @@ $_dashboardHome =
    ($_esConsejero      ? '/consejero/dashboard.php'      :
    ($_esAdmisiones     ? '/admisiones/dashboard.php'     :
    ($_esAdministracion ? '/administracion/dashboard.php' :
-                         '/apoyo/dashboard.php'))));
+   ($_esEquipo ? '/equipo/dashboard.php'                 :
+                         '/apoyo/dashboard.php')))));
+
+// ── Roles múltiples para el switcher ────────────────────────
+$_roles_usuario_header = $_SESSION['roles'] ?? [];
+$_rol_actual_header    = $_SESSION['rol']    ?? '';
+$_mostrar_switcher     = count($_roles_usuario_header) > 1;
+
+$_rol_info = [
+    'administrador'         => ['label' => 'Administrador',          'icon' => 'fa-user-shield'],
+    'encargado_consejeros'  => ['label' => 'Encargado Consejeros',   'icon' => 'fa-users-cog'],
+    'administracion'        => ['label' => 'Administración',         'icon' => 'fa-cash-register'],
+    'consejero'             => ['label' => 'Consejero',              'icon' => 'fa-comments'],
+    'apoyo'                 => ['label' => 'Apoyo',                  'icon' => 'fa-hands-helping'],
+    'admisiones'            => ['label' => 'Inscripción',            'icon' => 'fa-clipboard-check'],
+    'equipo'                => ['label' => 'Equipo',                 'icon' => 'fa-users'],
+];
 ?>
 
 <!-- ══ NAVBAR ══════════════════════════════════════════════ -->
@@ -438,6 +457,89 @@ $_dashboardHome =
                     </a>
                 </li>
 
+                <?php elseif ($_esEquipo): ?>
+                <!-- ── EQUIPO (Equipantes) ──────────────────────── -->
+                <li class="nav-item">
+                    <a class="nav-link<?php echo navActivo('dashboard.php'); ?>"
+                       href="/equipo/dashboard.php">
+                        <i class="fas fa-tachometer-alt"></i> Dashboard
+                    </a>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle<?php echo in_array($paginaActual,
+                        ['reclutamiento.php','hoja_trabajo.php','importar.php','nuevo_alumno.php']) ? ' active' : ''; ?>"
+                       href="#" role="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-users"></i> Reclutamiento
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li>
+                            <a class="dropdown-item" href="/equipo/reclutamiento.php">
+                                <i class="fas fa-list"></i> Lista General
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="/equipo/hoja_trabajo.php">
+                                <i class="fas fa-table"></i> Hoja de Trabajo
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item" href="/equipo/reclutamiento.php?action=add">
+                                <i class="fas fa-user-plus"></i> Nuevo Equipante
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="/equipo/nuevo_alumno.php?tipo=alumno">
+                                <i class="fas fa-user-graduate"></i> Nuevo Alumno
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="/equipo/nuevo_alumno.php?tipo=misionero">
+                                <i class="fas fa-pray"></i> Nuevo Misionero
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="/equipo/nuevo_alumno.php?tipo=invitado">
+                                <i class="fas fa-user-tag"></i> Nuevo Invitado
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="/equipo/nuevo_alumno.php?tipo=cocina">
+                                <i class="fas fa-utensils"></i> Nuevo Cocina
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item" href="/equipo/importar.php">
+                                <i class="fas fa-file-import"></i> Importar Excel
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="/equipo/sincronizar.php">
+                                <i class="fas fa-sync-alt"></i> Sincronizar Google Sheet
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link<?php echo navActivo('distribucion.php'); ?>"
+                       href="/equipo/distribucion.php">
+                        <i class="fas fa-clipboard-list"></i> Distribución
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link<?php echo navActivo('totales_semanales.php'); ?>"
+                       href="/equipo/totales_semanales.php">
+                        <i class="fas fa-calculator"></i> Totales
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link<?php echo navActivo('pagos.php'); ?>"
+                       href="/equipo/pagos.php">
+                        <i class="fas fa-hand-holding-usd"></i> Pagos
+                    </a>
+                </li>
+
                 <?php endif; ?>
             </ul>
             <!-- ── FIN LINKS ── -->
@@ -455,6 +557,12 @@ $_dashboardHome =
                             <span class="rol-badge <?php echo $_rolBadgeClass; ?> ms-1">
                                 <?php echo $_rolLabel; ?>
                             </span>
+                            <?php if ($_mostrar_switcher): ?>
+                            <span class="badge bg-info ms-1" title="Múltiples roles disponibles">
+                                <i class="fas fa-exchange-alt"></i>
+                                <?php echo count($_roles_usuario_header); ?>
+                            </span>
+                            <?php endif; ?>
                         </span>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end">
@@ -504,6 +612,32 @@ $_dashboardHome =
                                 <i class="fas fa-tools"></i> Mantenimiento
                             </a>
                         </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <?php endif; ?>
+
+                        <?php // ── SWITCHER DE ROLES ── ?>
+                        <?php if ($_mostrar_switcher): ?>
+                        <li class="px-3 py-1">
+                            <small class="text-muted fw-bold d-block">
+                                <i class="fas fa-exchange-alt"></i> Cambiar rol:
+                            </small>
+                        </li>
+                        <?php foreach ($_roles_usuario_header as $rol_h):
+                            $info_h = $_rol_info[$rol_h] ?? ['label' => ucfirst($rol_h), 'icon' => 'fa-user'];
+                            $es_activo_h = ($rol_h === $_rol_actual_header);
+                        ?>
+                        <li>
+                            <a class="dropdown-item <?= $es_activo_h ? 'active' : '' ?>"
+                               href="/cambiar_rol.php?rol=<?= urlencode($rol_h) ?>"
+                               onclick="window.location.href=this.href; return false;">
+                                <i class="fas <?= $info_h['icon'] ?> me-1"></i>
+                                <?= htmlspecialchars($info_h['label']) ?>
+                                <?php if ($es_activo_h): ?>
+                                <i class="fas fa-check ms-1 text-success"></i>
+                                <?php endif; ?>
+                            </a>
+                        </li>
+                        <?php endforeach; ?>
                         <li><hr class="dropdown-divider"></li>
                         <?php endif; ?>
 

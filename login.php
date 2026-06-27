@@ -16,30 +16,46 @@ if ($_POST) {
             $usuario = $stmt->fetch();  
               
             if ($usuario && verificarPassword($password, $usuario['password'])) {
+                // DESPUÉS — cargar roles múltiples y guardar el principal
                 $_SESSION['user_id']  = $usuario['id'];
                 $_SESSION['username'] = $usuario['username'];
-                $_SESSION['rol']      = $usuario['rol'];
                 $_SESSION['cabana_id']= $usuario['cabana_id'];
+                
+                // Cargar todos los roles del usuario
+                $roles_usuario = obtenerRolesUsuario($pdo, (int)$usuario['id']);
+                $_SESSION['roles'] = $roles_usuario; // array de todos sus roles
+                
+                // El rol activo = el principal (o el primero si no hay marcado)
+                $rol_activo = obtenerRolPrincipal($pdo, (int)$usuario['id']);
+                if (!$rol_activo) {
+                    // Si por algún caso edge no tiene roles en la tabla, usar el de usuarios
+                    $rol_activo = $usuario['rol'];
+                    $roles_usuario = [$rol_activo];
+                    $_SESSION['roles'] = $roles_usuario;
+                }
+                $_SESSION['rol'] = $rol_activo;
             
                 // ── LOG: login exitoso ──
                 registrarLog($pdo, 'login_exitoso',
                     "Login exitoso — rol: {$usuario['rol']}",
                     'auth', 'success');
             
-                if ($usuario['rol'] === 'administrador') {
+                if ($rol_activo === 'administrador') {
                     header('Location: admin/dashboard.php');
-                } elseif ($usuario['rol'] === 'encargado_consejeros') {
+                } elseif ($rol_activo === 'encargado_consejeros') {
                     header('Location: encargado_consejeros/dashboard.php');
-                } elseif ($usuario['rol'] === 'administracion') {
+                } elseif ($rol_activo === 'administracion') {
                     header('Location: administracion/dashboard.php');
-                } elseif ($usuario['rol'] === 'consejero') {
+                } elseif ($rol_activo === 'consejero') {
                     header('Location: consejero/dashboard.php');
-                } elseif ($usuario['rol'] === 'apoyo') {
+                } elseif ($rol_activo === 'apoyo') {
                     header('Location: apoyo/dashboard.php');
-                } elseif ($usuario['rol'] === 'admisiones') {
+                } elseif ($rol_activo === 'admisiones') {
                     header('Location: admisiones/dashboard.php');
-                } elseif ($usuario['rol'] === 'direccion_campamento') {
+                } elseif ($rol_activo === 'direccion_campamento') {
                     header('Location: direccion/dashboard.php');
+                } elseif ($rol_activo === 'equipo') {
+                    header('Location: equipo/dashboard.php');
                 }
                 exit();  
             } else {
@@ -332,6 +348,37 @@ if ($_POST) {
         .login-brand-footer a:hover {
             color: var(--wol-light-blue);
         }
+        
+        /* ── Branding esquina inferior (fixed, sutil) ── */
+        .login-brand-corner {
+            position: fixed;
+            bottom: 10px;
+            right: 12px;
+            z-index: 100;
+            background: rgba(0, 31, 42, 0.35);
+            padding: 4px 10px;
+            border-radius: 5px;
+            backdrop-filter: blur(3px);
+        }
+        
+        .login-brand-corner span {
+            color: rgba(255, 255, 255, 0.20);
+            font-size: 0.68rem;
+            letter-spacing: 0.2px;
+            white-space: nowrap;
+        }
+        
+        .login-brand-corner a {
+            color: rgba(115, 209, 245, 0.25);
+            text-decoration: none;
+            font-weight: 400;
+            transition: var(--transition);
+        }
+        
+        .login-brand-corner a:hover {
+            color: rgba(115, 209, 245, 0.6);
+            text-decoration: underline;
+        }
 
         /* ── Responsive ── */
         @media (max-width: 480px) {
@@ -445,6 +492,16 @@ if ($_POST) {
             <span>
                 <a href="https://palabradevidasv.org/" target="_blank">Palabra de Vida El Salvador</a>
                 · Campamento PV · <?php echo date('Y'); ?>
+            </span>
+        </div>
+        
+        <!-- Branding esquina inferior -->
+        <div class="login-brand-corner">
+            <span>
+                Desarrollado por
+                <a href="https://palabradevidasv.org/" target="_blank" rel="noopener noreferrer">
+                    Palabra de Vida El Salvador
+                </a>
             </span>
         </div>
 
