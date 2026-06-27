@@ -7,7 +7,7 @@
 const OfflineSync = (() => {
 
     const DB_NAME    = 'CampamentoPV';
-    const DB_VERSION = 3;
+    const DB_VERSION = 4;
     const STORES     = {
         consejerias: 'consejerias_pendientes',
         acampantes:  'acampantes_pendientes'
@@ -27,7 +27,7 @@ const OfflineSync = (() => {
             await mostrarContadorPendientes();
             interceptarFormularios();
             cachearPaginaActual();      // ← nuevo
-            console.log('[OfflineSync] Inicializado correctamente');
+            
         } catch (err) {
             console.error('[OfflineSync] Error al inicializar:', err);
         }
@@ -70,14 +70,12 @@ const OfflineSync = (() => {
     
         // Admin y encargado — salir sin cachear
         if (paginasCacheables.length === 0) {
-            console.log('[OfflineSync] Página de admin/encargado — no cacheada:', path);
             return;
         }
     
         // Verificar si la página actual está en la lista
         const esCacheable = paginasCacheables.some(p => url.includes(p));
         if (!esCacheable) {
-            console.log('[OfflineSync] Página no cacheable para este rol:', url);
             return;
         }
     
@@ -87,7 +85,6 @@ const OfflineSync = (() => {
                 cache.put(url, new Response(document.documentElement.outerHTML, {
                     headers: { 'Content-Type': 'text/html; charset=utf-8' }
                 }));
-                console.log('[OfflineSync] ✓ Página cacheada:', url);
             })
             .catch(err => console.warn('[OfflineSync] No se pudo cachear:', err));
     
@@ -156,7 +153,6 @@ const OfflineSync = (() => {
     
         // Si no hay lista o está vacía, no cachear nada
         if (paginasCacheables.length === 0) {
-            console.log('[OfflineSync] Rol sin páginas cacheables:', path);
             return;
         }
     
@@ -196,8 +192,7 @@ const OfflineSync = (() => {
             return;
         }
         try {
-            const reg = await navigator.serviceWorker.register('/sw.js?v=21', { scope: '/' });
-            console.log('[OfflineSync] SW registrado:', reg.scope);
+            const reg = await navigator.serviceWorker.register('/sw.js?v=23', { scope: '/' });
 
             // Escuchar mensajes del SW
             navigator.serviceWorker.addEventListener('message', async event => {
@@ -211,15 +206,12 @@ const OfflineSync = (() => {
                 // POST falló porque no hay internet → guardar en IndexedDB
                 if (event.data?.type === 'POST_FAILED_OFFLINE') {
                     if (window._offlineFormHandled) {
-                        console.log('[OfflineSync] POST ya manejado por interceptor, ignorando SW message');
                         return;
                     }
                 
                     const url         = event.data.url        || '';
                     const parsedData  = event.data.parsedData || {};
                     const isMultipart = event.data.isMultipart || false;
-                
-                    console.log('[OfflineSync] POST capturado por SW (fallback):', url);
                 
                     let dataObj = {};
                 
@@ -238,7 +230,6 @@ const OfflineSync = (() => {
                                     dataObj[key] = value;
                                 }
                             });
-                            console.log('[OfflineSync] Datos tomados del DOM:', Object.keys(dataObj));
                         } else {
                             console.error('[OfflineSync] No se encontró el formulario en el DOM');
                             return;
@@ -294,7 +285,6 @@ const OfflineSync = (() => {
     }
 
     function alRecuperarConexion() {
-        console.log('[OfflineSync] ✅ Conexión recuperada');
         mostrarEstadoConexion();
         mostrarToast('✅ Conexión recuperada — sincronizando datos...', 'success');
         // Esperar 2 segundos para que la red estabilice
@@ -302,7 +292,6 @@ const OfflineSync = (() => {
     }
 
     function alPerderConexion() {
-        console.log('[OfflineSync] ⚠️ Sin conexión');
         mostrarEstadoConexion();
         mostrarToast('⚠️ Sin conexión — los cambios se guardarán localmente', 'warning');
     }
@@ -445,13 +434,10 @@ const OfflineSync = (() => {
                 const database   = e.target.result;
                 const oldVersion = e.oldVersion;
     
-                console.log(`[OfflineSync] Migrando DB v${oldVersion} → v3`);
-    
                 // Eliminar stores viejos si existen con estructura rota
                 Object.values(STORES).forEach(storeName => {
                     if (database.objectStoreNames.contains(storeName)) {
                         database.deleteObjectStore(storeName);
-                        console.log(`[OfflineSync] Store recreado: ${storeName}`);
                     }
                 });
     
@@ -461,12 +447,10 @@ const OfflineSync = (() => {
                         keyPath: 'id', autoIncrement: true
                     });
                     store.createIndex('timestamp', 'timestamp', { unique: false });
-                    console.log(`[OfflineSync] Store creado: ${storeName}`);
                 });
             };
     
             req.onsuccess = e => {
-                console.log('[OfflineSync] DB abierta correctamente v3');
                 resolve(e.target.result);
             };
             req.onerror  = e => reject(e.target.error);
@@ -658,7 +642,6 @@ const OfflineSync = (() => {
                         const reg = await navigator.serviceWorker.ready;
                         const tag = esConsejeria ? 'sync-consejerias' : 'sync-acampantes';
                         await reg.sync.register(tag);
-                        console.log(`[OfflineSync] Background sync registrado: ${tag}`);
                     } catch (syncErr) {
                         console.warn('[OfflineSync] Background sync no disponible:', syncErr);
                     }
@@ -681,6 +664,12 @@ const OfflineSync = (() => {
     // Interceptar navegación offline
     document.addEventListener('click', function(e) {
         if (navigator.onLine) return;
+
+        // No interceptar cambiar_rol.php (siempre debe funcionar online)
+        const linkCheck = e.target.closest('a[href]');
+        if (linkCheck && linkCheck.getAttribute('href')?.includes('cambiar_rol.php')) {
+            return; // Dejar que el navegador lo maneje normalmente
+        }
     
         const link = e.target.closest('a[href]');
         if (!link) return;

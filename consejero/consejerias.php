@@ -425,71 +425,41 @@ include '../includes/header.php';
                 <!-- El formulario va aquí -->   
                 <form id="formConsejeria"  method="POST" action="consejerias.php?action=add&acampante_id=<?php echo $acampante_id; ?>">  
                     <input type="hidden" name="acampante_id" value="<?php echo $acampante_id; ?>">
-
-                    <!-- 1. CONSEJERO RESPONSABLE — LO PRIMERO -->
+                    
+                    <!-- 1. CONSEJERO RESPONSABLE (solo lectura, se asigna en mis_acampantes.php) -->
                     <?php
-                    // Default: usar responsable guardado, si no hay → consejero principal
                     $responsable_actual = $acampanteSeleccionado['consejero_responsable'] ?? '';
-                    if (empty($responsable_actual) && $consejero_principal_cabana) {
-                        $responsable_actual = $consejero_principal_cabana;
-                    }
                     ?>
                     <div class="card border-warning mb-4">
                         <div class="card-header bg-warning bg-opacity-25">
                             <h6 class="mb-0">
                                 <i class="fas fa-user-shield"></i> Consejero Responsable
                             </h6>
-                            <small class="text-muted">
-                                ¿Quién estará a cargo del seguimiento de
-                                <strong><?php echo htmlspecialchars($acampanteSeleccionado['nombre']); ?></strong>?
-                            </small>
                         </div>
                         <div class="card-body">
-                            <?php if (!empty($consejeros_cabana)): ?>
-                            <div class="d-flex flex-wrap gap-2 mb-3" id="btns-consejeros">
-                                <?php foreach ($consejeros_cabana as $cons):
-                                    $rolLabel = $cons['rol'] === 'principal' ? 'Principal' : 'Asistente';
-                                    $esActual = $responsable_actual === $cons['nombre_consejero'];
-                                ?>
-                                <button type="button"
-                                        class="btn btn-<?php echo $esActual ? 'warning' : 'outline-secondary'; ?> btn-consejero-resp"
-                                        data-nombre="<?php echo htmlspecialchars($cons['nombre_consejero']); ?>"
-                                        onclick="seleccionarResponsable('<?php echo htmlspecialchars($cons['nombre_consejero'], ENT_QUOTES); ?>')">
-                                    <i class="fas fa-user"></i>
-                                    <?php echo htmlspecialchars($cons['nombre_consejero']); ?>
-                                    <span class="badge bg-<?php echo $cons['rol']==='principal'?'primary':'secondary'; ?> ms-1"
-                                          style="font-size:9px;">
-                                        <?php echo $rolLabel; ?>
-                                    </span>
-                                </button>
-                                <?php endforeach; ?>
-                                <button type="button"
-                                        class="btn btn-outline-danger btn-sm"
-                                        onclick="seleccionarResponsable('')"
-                                        title="Quitar responsable">
-                                    <i class="fas fa-times"></i> Sin asignar
-                                </button>
-                            </div>
+                            <?php if (!empty($responsable_actual)): ?>
+                            <p class="mb-2">
+                                <strong><?php echo htmlspecialchars($responsable_actual); ?></strong>
+                                está a cargo del seguimiento de
+                                <strong><?php echo htmlspecialchars($acampanteSeleccionado['nombre']); ?></strong>.
+                            </p>
+                            <?php else: ?>
+                            <p class="mb-2 text-muted">
+                                <em>Sin responsable asignado.</em> Asígnalo desde
+                                <a href="mis_acampantes.php"><strong>Mis Acampantes</strong></a>.
+                            </p>
                             <?php endif; ?>
-
-                            <input type="text"
-                                   class="form-control"
-                                   id="consejero_responsable"
-                                   name="consejero_responsable"
-                                   value="<?php echo htmlspecialchars($responsable_actual); ?>"
-                                   placeholder="Nombre del consejero responsable...">
-                            <small class="text-muted">
-                                <i class="fas fa-info-circle"></i>
-                                <?php if ($consejero_principal_cabana && empty($acampanteSeleccionado['consejero_responsable'])): ?>
-                                    Se asignó <strong><?php echo htmlspecialchars($consejero_principal_cabana); ?></strong>
-                                    como responsable por defecto (consejero principal de la cabaña).
-                                <?php else: ?>
-                                    Visible para el administrador y el equipo de apoyo.
-                                <?php endif; ?>
-                            </small>
+                    
+                            <!-- Hidden para conservar el valor al guardar la consejería -->
+                            <input type="hidden" name="consejero_responsable"
+                                   value="<?php echo htmlspecialchars($responsable_actual); ?>">
+                    
+                            <a href="mis_acampantes.php" class="btn btn-outline-warning btn-sm">
+                                <i class="fas fa-edit"></i> Cambiar responsable
+                            </a>
                         </div>
                     </div>
-
+                    
                     <!-- 2. EVALUACIÓN ESPIRITUAL -->  
                     <div class="card border-primary mb-4">  
                         <div class="card-header bg-primary text-white">  

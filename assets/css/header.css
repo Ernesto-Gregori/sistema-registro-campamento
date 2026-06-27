@@ -258,6 +258,11 @@ letter-spacing: 0.3px;
     border: 1px solid rgba(0, 79, 104, 0.35);
 }
 
+.rol-badge-equipo { 
+    background-color: #6f42c1; 
+    color: #fff; 
+}
+
 /* Fallback genérico para roles no mapeados */
 .rol-badge-default {
     background: rgba(108, 117, 125, 0.15);

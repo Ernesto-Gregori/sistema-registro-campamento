@@ -40,10 +40,11 @@ if ($_POST) {
         if ($post_accion === 'crear') {
             $username       = trim($_POST['username']);
             $password_plain = trim($_POST['password']);
-            $rol            = $_POST['rol'];
+            $rol            = $_POST['rol']; // Rol principal (para compatibilidad)
             $genero_acceso  = $_POST['genero_acceso'] ?? 'ambos';
             $cabana_id      = !empty($_POST['cabana_id']) ? (int)$_POST['cabana_id'] : null;
             $activo         = isset($_POST['activo']) ? 1 : 0;
+            $roles_extra    = $_POST['roles_extra'] ?? []; // Array de roles adicionales
 
             if (empty($username) || empty($password_plain) || empty($rol)) {
                 throw new Exception("Username, contraseña y rol son obligatorios");
@@ -67,9 +68,24 @@ if ($_POST) {
                 $cabana_id,
                 $activo
             ]);
+            $nuevo_user_id = $pdo->lastInsertId();
 
+            // ── Guardar roles en usuario_roles ──
+            // Rol principal
+            $pdo->prepare("INSERT IGNORE INTO usuario_roles (usuario_id, rol, es_principal) VALUES (?, ?, 1)")
+                ->execute([$nuevo_user_id, $rol]);
+
+            // Roles adicionales
+            foreach ($roles_extra as $rol_extra) {
+                if ($rol_extra !== $rol && in_array($rol_extra, $roles_enum)) {
+                    $pdo->prepare("INSERT IGNORE INTO usuario_roles (usuario_id, rol, es_principal) VALUES (?, ?, 0)")
+                        ->execute([$nuevo_user_id, $rol_extra]);
+                }
+            }
+
+            $roles_str = $rol . (!empty($roles_extra) ? ', ' . implode(', ', array_diff($roles_extra, [$rol])) : '');
             registrarLog($pdo, 'usuario_creado',
-                "Creó usuario '{$username}' con rol '{$rol}'",
+                "Creó usuario '{$username}' con rol(es): {$roles_str}",
                 'usuarios', 'success');
             $message = "✅ Usuario '$username' creado correctamente";
             $accion  = 'lista';
@@ -79,11 +95,12 @@ if ($_POST) {
         if ($post_accion === 'editar') {
             $id            = (int)$_POST['id'];
             $username      = trim($_POST['username']);
-            $rol           = $_POST['rol'];
+            $rol           = $_POST['rol']; // Rol principal
             $genero_acceso = $_POST['genero_acceso'] ?? 'ambos';
             $cabana_id     = !empty($_POST['cabana_id']) ? (int)$_POST['cabana_id'] : null;
             $activo        = isset($_POST['activo']) ? 1 : 0;
             $nueva_pass    = trim($_POST['password'] ?? '');
+            $roles_extra   = $_POST['roles_extra'] ?? []; // Array de roles adicionales
 
             if (empty($username) || empty($rol)) {
                 throw new Exception("Username y rol son obligatorios");
@@ -119,8 +136,25 @@ if ($_POST) {
                 ]);
             }
 
+            // ── Actualizar roles en usuario_roles ──
+            // 1. Eliminar todos los roles actuales
+            $pdo->prepare("DELETE FROM usuario_roles WHERE usuario_id = ?")->execute([$id]);
+
+            // 2. Insertar el rol principal
+            $pdo->prepare("INSERT INTO usuario_roles (usuario_id, rol, es_principal) VALUES (?, ?, 1)")
+                ->execute([$id, $rol]);
+
+            // 3. Insertar roles adicionales
+            foreach ($roles_extra as $rol_extra) {
+                if ($rol_extra !== $rol && in_array($rol_extra, $roles_enum)) {
+                    $pdo->prepare("INSERT INTO usuario_roles (usuario_id, rol, es_principal) VALUES (?, ?, 0)")
+                        ->execute([$id, $rol_extra]);
+                }
+            }
+
+            $roles_str = $rol . (!empty($roles_extra) ? ', ' . implode(', ', array_diff($roles_extra, [$rol])) : '');
             registrarLog($pdo, 'usuario_editado',
-                "Editó usuario '{$username}'" . (!empty($nueva_pass) ? ' (contraseña cambiada)' : ''),
+                "Editó usuario '{$username}' con rol(es): {$roles_str}" . (!empty($nueva_pass) ? ' (contraseña cambiada)' : ''),
                 'usuarios', 'info');
             $message = "✅ Usuario '$username' actualizado correctamente";
             $accion  = 'lista';
@@ -213,6 +247,7 @@ $usuarios = $stmt->fetchAll();
 
 // Usuario a editar
 $usuario_edit = null;
+$roles_actuales_user = []; // Roles extra del usuario que se edita
 if ($accion === 'editar' && $edit_id) {
     $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE id = ?");
     $stmt->execute([$edit_id]);
@@ -220,6 +255,17 @@ if ($accion === 'editar' && $edit_id) {
     if (!$usuario_edit) {
         $error  = "Usuario no encontrado";
         $accion = 'lista';
+    } else {
+        // Cargar todos los roles del usuario
+        $stmt_roles = $pdo->prepare("SELECT rol, es_principal FROM usuario_roles WHERE usuario_id = ?");
+        $stmt_roles->execute([$edit_id]);
+        $roles_data = $stmt_roles->fetchAll(PDO::FETCH_ASSOC);
+        $roles_actuales_user = [];
+        foreach ($roles_data as $rd) {
+            if ($rd['es_principal'] != 1) {
+                $roles_actuales_user[] = $rd['rol']; // Solo los extra, no el principal
+            }
+        }
     }
 }
 
@@ -363,6 +409,40 @@ if ($accion === 'nuevo' || $accion === 'editar'):
                     </option>
                     <?php endforeach; ?>
                 </select>
+            </div>
+            
+            <!-- Roles adicionales (multi-rol) -->
+            <div class="mb-3" id="bloque_roles_extra">
+                <label class="form-label fw-bold">
+                    <i class="fas fa-layer-group"></i> Roles adicionales
+                    <small class="text-muted fw-normal">(opcional)</small>
+                </label>
+                <div class="alert alert-info py-2 small mb-2">
+                    <i class="fas fa-info-circle"></i>
+                    Marca los roles adicionales que este usuario podrá usar.
+                    El rol de arriba es el <strong>principal</strong> (con el que entra por defecto).
+                </div>
+                <div class="row g-2">
+                    <?php foreach ($roles_config as $rol_val => $cfg):
+                        $rol_principal = ($form_user['rol'] ?? $_POST['rol'] ?? '');
+                        if ($rol_val === $rol_principal) continue; // No mostrar el principal aquí
+                        $tiene_rol_extra = in_array($rol_val, $roles_actuales_user);
+                    ?>
+                    <div class="col-md-6">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox"
+                                   name="roles_extra[]"
+                                   value="<?php echo $rol_val; ?>"
+                                   id="extra_<?php echo $rol_val; ?>"
+                                   <?php echo $tiene_rol_extra ? 'checked' : ''; ?>>
+                            <label class="form-check-label" for="extra_<?php echo $rol_val; ?>">
+                                <i class="fas <?php echo $cfg['icon']; ?> text-<?php echo $cfg['color']; ?>"></i>
+                                <?php echo $cfg['label']; ?>
+                            </label>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
             </div>
 
             <!-- Género acceso (solo para apoyo) -->
@@ -544,6 +624,20 @@ else:
                             <i class="fas <?php echo $cfg['icon']; ?>"></i>
                             <?php echo $cfg['label']; ?>
                         </span>
+                        <?php
+                        // Mostrar roles adicionales
+                        $stmt_re = $pdo->prepare("SELECT rol FROM usuario_roles WHERE usuario_id = ? AND es_principal = 0");
+                        $stmt_re->execute([$u['id']]);
+                        $roles_extra_user = $stmt_re->fetchAll(PDO::FETCH_COLUMN);
+                        foreach ($roles_extra_user as $re):
+                            $cfg_re = $roles_config[$re] ?? ['color'=>'secondary','icon'=>'fa-user','label'=>$re];
+                        ?>
+                        <br>
+                        <span class="badge bg-<?php echo $cfg_re['color']; ?> bg-opacity-50 mt-1" style="font-size:10px;">
+                            <i class="fas <?php echo $cfg_re['icon']; ?>"></i>
+                            <?php echo $cfg_re['label']; ?>
+                        </span>
+                        <?php endforeach; ?>
                     </td>
 
                     <td class="small">

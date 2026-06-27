@@ -64,6 +64,13 @@ if ($_POST && $semana_id_activa) {
         $observaciones = limpiarDatos($_POST['observaciones']);
         $cabana_id = !empty($_POST['cabana_id']) ? (int)$_POST['cabana_id'] : null;
 
+        // ⭐ Verificación de documentos y pago (registro directo)
+        $documentos_revisados = isset($_POST['documentos_revisados']) ? 1 : 0;
+        $pago_confirmado      = isset($_POST['pago_confirmado']) ? 1 : 0;
+
+        // Si marca pago, equivale a check-in (llego=1) para que sea visible en listas
+        $llego_valor = $pago_confirmado ? 1 : 0;
+
         // Validaciones
         if (empty($nombre)) throw new Exception("El nombre es obligatorio");
         if (empty($sexo) || !in_array($sexo, ['masculino', 'femenino']))
@@ -117,13 +124,19 @@ if ($_POST && $semana_id_activa) {
                               (nombre, edad, edad_autorizada, sexo, iglesia, estado_origen, 
                                contacto_emergencia_nombre, contacto_emergencia_telefono,
                                alergias_enfermedades, observaciones,
-                               cabana_id, semana_id, year_campamento, estado)
-                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo')");
+                               cabana_id, semana_id, year_campamento, estado,
+                               documentos_revisados, documentos_revisados_por, documentos_revisados_at,
+                               llego, fecha_llegada)
+                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo',
+                                      ?, ?, NOW(), ?, NOW())");
         $stmt->execute([
             $nombre, $edad, $edad_autorizada, $sexo, $iglesia, $estado_origen,
             $contacto_emergencia_nombre, $contacto_emergencia_telefono,
             $alergias_enfermedades, $observaciones,
-            $cabana_id, $semana_id_activa, obtenerAnioCampamento()
+            $cabana_id, $semana_id_activa, obtenerAnioCampamento(),
+            $documentos_revisados,
+            $documentos_revisados ? $_SESSION['user_id'] : null,
+            $llego_valor
         ]);
 
         $message = "Acampante registrado exitosamente";
@@ -398,6 +411,46 @@ include '../includes/header.php';
                     <div id="alerta_genero" class="alert alert-warning" style="display:none;">
                         <i class="fas fa-exclamation-triangle"></i>
                         <strong>Atención:</strong> El sexo del acampante no coincide con el género de esta cabaña.
+                    </div>
+                    
+                    <!-- Verificación de documentos y pago (registro directo) -->
+                    <div class="card border-info mt-3">
+                        <div class="card-header bg-info bg-opacity-25 py-2">
+                            <h6 class="mb-0 small">
+                                <i class="fas fa-clipboard-check"></i> Verificación directa
+                            </h6>
+                        </div>
+                        <div class="card-body py-2">
+                            <div class="alert alert-warning py-2 small mb-2">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                Usa estas casillas solo si <strong>Admisiones</strong>
+                                no está disponible y necesitas registrar al acampante completo.
+                            </div>
+
+                            <div class="form-check mb-2">
+                                <input type="checkbox" class="form-check-input" id="documentos_revisados"
+                                       name="documentos_revisados" value="1">
+                                <label class="form-check-label small" for="documentos_revisados">
+                                    <i class="fas fa-file-check text-info"></i>
+                                    Revisé sus documentos
+                                </label>
+                            </div>
+
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="pago_confirmado"
+                                       name="pago_confirmado" value="1"
+                                       onchange="document.getElementById('aviso_pago').style.display = this.checked ? 'block' : 'none';">
+                                <label class="form-check-label small" for="pago_confirmado">
+                                    <i class="fas fa-money-bill-wave text-success"></i>
+                                    Confirmé el pago (check-in)
+                                </label>
+                            </div>
+
+                            <div id="aviso_pago" class="alert alert-success py-1 small mt-2 mb-0" style="display:none;">
+                                <i class="fas fa-check-circle"></i>
+                                Al marcar pago, el acampante quedará visible en la lista con check-in.
+                            </div>
+                        </div>
                     </div>
 
                     <div class="alert alert-info mt-3">

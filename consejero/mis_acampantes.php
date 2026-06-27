@@ -45,6 +45,34 @@ if (!empty($misAcampantes)) {
         $consejeriasPorAcampante[$row['acampante_id']] = $row['total'];
     }
 }
+
+// ── Cargar consejeros asignados a esta cabaña (semana activa) ──
+$consejeros_cabana = [];
+$consejero_principal_cabana = null;
+try {
+    if ($semana_id_activa) {
+        $stmt_cons = $pdo->prepare("SELECT nombre_consejero, rol
+                                    FROM consejeros_semana
+                                    WHERE cabana_id = ? AND semana_id = ?
+                                    AND rol IN ('principal','asistente')
+                                    ORDER BY 
+                                        CASE rol
+                                            WHEN 'principal' THEN 1
+                                            WHEN 'asistente' THEN 2
+                                        END");
+        $stmt_cons->execute([$cabana_id, $semana_id_activa]);
+        $consejeros_cabana = $stmt_cons->fetchAll();
+
+        foreach ($consejeros_cabana as $c) {
+            if ($c['rol'] === 'principal') {
+                $consejero_principal_cabana = $c['nombre_consejero'];
+                break;
+            }
+        }
+    }
+} catch (Exception $e) {
+    $consejeros_cabana = [];
+}
   
 include '../includes/header.php';  
 ?>  
@@ -215,21 +243,77 @@ include '../includes/header.php';
                             <?php endif; ?>
                         </div>
 
-                        <!-- Consejero responsable -->
-                        <?php if (!empty($acampante['consejero_responsable'])): ?>
-                        <div class="mb-1">
-                            <span class="badge bg-warning text-dark">
-                                <i class="fas fa-user-shield"></i>
-                                <?php echo htmlspecialchars($acampante['consejero_responsable']); ?>
-                            </span>
+                        <!-- Consejero responsable (asignable desde aquí) -->
+                        <?php
+                        $responsable_actual = $acampante['consejero_responsable'] ?? '';
+                        $tiene_responsable  = !empty($responsable_actual);
+                        ?>
+                        <div class="mb-2 p-2 rounded border
+                             <?php echo $tiene_responsable ? 'border-warning bg-warning bg-opacity-10' : 'border-light bg-light'; ?>">
+                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                <small class="fw-bold text-muted" style="font-size:11px;">
+                                    <i class="fas fa-user-shield"></i> Responsable
+                                </small>
+                                <button type="button"
+                                        class="btn btn-sm btn-link p-0 text-decoration-none"
+                                        onclick="toggleSelectorResponsable(<?php echo $acampante['id']; ?>)"
+                                        title="Cambiar responsable">
+                                    <i class="fas fa-edit text-primary" style="font-size:11px;"></i>
+                                </button>
+                            </div>
+                        
+                            <!-- Nombre visible del responsable -->
+                            <div id="respLabel_<?php echo $acampante['id']; ?>"
+                                 class="small fw-semibold <?php echo $tiene_responsable ? 'text-dark' : 'text-muted'; ?>">
+                                <?php echo $tiene_responsable
+                                    ? htmlspecialchars($responsable_actual)
+                                    : '<em>Sin asignar</em>'; ?>
+                            </div>
+                        
+                            <!-- Selector desplegable (oculto por defecto) -->
+                            <div id="respSelector_<?php echo $acampante['id']; ?>" class="mt-2" style="display:none;">
+                                <?php if (!empty($consejeros_cabana)): ?>
+                                <div class="d-flex flex-wrap gap-1 mb-2">
+                                    <?php foreach ($consejeros_cabana as $cons):
+                                        $rolLabel = $cons['rol'] === 'principal' ? 'Principal' : 'Asistente';
+                                        $esActual = $responsable_actual === $cons['nombre_consejero'];
+                                    ?>
+                                    <button type="button"
+                                            class="btn btn-sm <?php echo $esActual ? 'btn-warning' : 'btn-outline-secondary'; ?>"
+                                            style="font-size:11px; padding:2px 8px;"
+                                            onclick="asignarResponsable(<?php echo $acampante['id']; ?>,
+                                                '<?php echo htmlspecialchars($cons['nombre_consejero'], ENT_QUOTES); ?>')">
+                                        <?php echo htmlspecialchars($cons['nombre_consejero']); ?>
+                                        <span class="badge bg-<?php echo $cons['rol']==='principal'?'primary':'secondary'; ?>"
+                                              style="font-size:8px;"><?php echo $rolLabel; ?></span>
+                                    </button>
+                                    <?php endforeach; ?>
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-danger"
+                                            style="font-size:11px; padding:2px 8px;"
+                                            onclick="asignarResponsable(<?php echo $acampante['id']; ?>, '')"
+                                            title="Quitar responsable">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <?php endif; ?>
+                        
+                                <!-- Campo libre por si no está en la lista -->
+                                <div class="input-group input-group-sm">
+                                    <input type="text"
+                                           class="form-control form-control-sm"
+                                           id="respInput_<?php echo $acampante['id']; ?>"
+                                           placeholder="Escribir nombre..."
+                                           value="<?php echo htmlspecialchars($responsable_actual); ?>"
+                                           style="font-size:12px;">
+                                    <button type="button"
+                                            class="btn btn-success btn-sm"
+                                            onclick="guardarResponsableInput(<?php echo $acampante['id']; ?>)">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                        <?php else: ?>
-                        <div class="mb-1">
-                            <span class="badge bg-light text-muted border">
-                                <i class="fas fa-user-shield"></i> Sin responsable asignado
-                            </span>
-                        </div>
-                        <?php endif; ?>
 
                         <!-- Badge consejerías -->
                         <span class="badge bg-<?php echo $colorBadge; ?>">
@@ -524,6 +608,84 @@ function mostrarToast(mensaje, tipo = 'success') {
     toast.innerHTML = '<i class="fas fa-check-circle"></i> ' + mensaje;
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 3000);
+}
+
+// ── Asignar consejero responsable desde la tarjeta ────────────
+function toggleSelectorResponsable(acampanteId) {
+    const sel = document.getElementById('respSelector_' + acampanteId);
+    if (sel) sel.style.display = (sel.style.display === 'none') ? 'block' : 'none';
+}
+
+function asignarResponsable(acampanteId, nombre) {
+    guardarResponsable(acampanteId, nombre);
+}
+
+function guardarResponsableInput(acampanteId) {
+    const input = document.getElementById('respInput_' + acampanteId);
+    if (!input) return;
+    guardarResponsable(acampanteId, input.value.trim());
+}
+
+function guardarResponsable(acampanteId, nombre) {
+    fetch('asignar_responsable.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'acampante_id=' + acampanteId + '&consejero_responsable=' + encodeURIComponent(nombre)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            // Actualizar etiqueta visible
+            const label = document.getElementById('respLabel_' + acampanteId);
+            if (label) {
+                if (data.responsable) {
+                    label.innerHTML = htmlspecialchars(data.responsable);
+                    label.className = 'small fw-semibold text-dark';
+                } else {
+                    label.innerHTML = '<em>Sin asignar</em>';
+                    label.className = 'small fw-semibold text-muted';
+                }
+            }
+
+            // Actualizar botones de la lista
+            document.querySelectorAll('#respSelector_' + acampanteId + ' .btn').forEach(btn => {
+                // Saltar el botón de guardar del input
+                if (btn.classList.contains('btn-success')) return;
+            });
+
+            // Actualizar borde del contenedor
+            const cont = label ? label.closest('.border') : null;
+            if (cont) {
+                if (data.responsable) {
+                    cont.className = 'mb-2 p-2 rounded border border-warning bg-warning bg-opacity-10';
+                } else {
+                    cont.className = 'mb-2 p-2 rounded border border-light bg-light';
+                }
+            }
+
+            // Ocultar selector
+            const sel = document.getElementById('respSelector_' + acampanteId);
+            if (sel) sel.style.display = 'none';
+
+            // Toast
+            mostrarToast(
+                data.responsable
+                    ? 'Responsable asignado: ' + data.responsable
+                    : 'Responsable quitado para ' + data.acampante,
+                data.responsable ? 'success' : 'warning'
+            );
+        } else {
+            alert('Error: ' + (data.error || 'desconocido'));
+        }
+    })
+    .catch(err => alert('Error de conexión: ' + err.message));
+}
+
+// Helper para escapar HTML en JS
+function htmlspecialchars(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
 }
 </script>
 
