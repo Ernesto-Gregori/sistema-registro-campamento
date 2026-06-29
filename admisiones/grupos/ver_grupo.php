@@ -12,6 +12,16 @@ $id      = (int)($_GET['id'] ?? 0);
 $message = $_GET['message'] ?? '';
 $error   = '';
 
+// ── Leer mensajes flash de sesión ─────────────────────────────────────────────
+if (empty($message) && isset($_SESSION['mensaje_exito'])) {
+    $message = $_SESSION['mensaje_exito'];
+    unset($_SESSION['mensaje_exito']);
+}
+if (empty($error) && isset($_SESSION['mensaje_error'])) {
+    $error = $_SESSION['mensaje_error'];
+    unset($_SESSION['mensaje_error']);
+}
+
 if (!$id) { header('Location: lista_grupos.php'); exit(); }
 
 $stmt = $pdo->prepare("
@@ -519,7 +529,7 @@ include '../../includes/header.php';
                             <th>CURP</th>
                             <th class="text-end">Costo</th>
                             <th class="text-center">Docs / Estado</th>
-                            <th class="text-center">Editar</th>
+                            <th class="text-center">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -593,11 +603,21 @@ include '../../includes/header.php';
                             <?php endif; ?>
                         </td>
                         <td class="text-center">
-                            <a href="editar_acampante_grupo.php?id=<?= $ac['id'] ?>&grupo_id=<?= $id ?>"
-                               class="btn btn-sm btn-outline-primary"
-                               title="Editar acampante">
-                                <i class="fas fa-edit"></i>
-                            </a>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="editar_acampante_grupo.php?id=<?= $ac['id'] ?>&grupo_id=<?= $id ?>"
+                                   class="btn btn-outline-primary"
+                                   title="Editar acampante">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <?php if (esAdministrador() || esAdmisiones()): ?>
+                                <a href="eliminar_acampante_grupo.php?acampante_id=<?= $ac['id'] ?>&grupo_id=<?= $id ?>"
+                                   class="btn btn-outline-danger"
+                                   title="Eliminar acampante"
+                                   onclick="return confirm('¿Eliminar permanentemente a <?= htmlspecialchars($ac['nombre'], ENT_QUOTES) ?> del grupo? Esta acción no se puede deshacer.')">
+                                    <i class="fas fa-trash-alt"></i>
+                                </a>
+                                <?php endif; ?>
+                            </div>
                         </td>
                     </tr>
                     <?php endforeach; ?>
