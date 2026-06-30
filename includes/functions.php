@@ -509,6 +509,72 @@ function obtenerRolPrincipal(PDO $pdo, int $usuario_id): ?string {
 
     return $rol ?: null;
 }
+
+// =====================================================================
+// MÓDULO ACCESO DE ENCARGADOS DE GRUPO
+// =====================================================================
+
+/**
+ * Genera un código de acceso único para un grupo.
+ * Formato: GRP-XXXXXX (6 caracteres alfanuméricos en mayúsculas).
+ */
+function generarCodigoAccesoGrupo(): string {
+    $caracteres = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin I, O, 0, 1 para evitar confusión
+    $codigo = 'GRP-';
+    for ($i = 0; $i < 6; $i++) {
+        $codigo .= $caracteres[random_int(0, strlen($caracteres) - 1)];
+    }
+    return $codigo;
+}
+
+/**
+ * Verifica si existe una sesión válida de encargado de grupo.
+ */
+function esSesionEncargadoGrupo(): bool {
+    return isset($_SESSION['encargado_grupo_id'])
+        && isset($_SESSION['encargado_grupo_nombre'])
+        && isset($_SESSION['encargado_grupo_codigo'])
+        && !empty($_SESSION['encargado_grupo_id']);
+}
+
+/**
+ * Verifica que haya una sesión de encargado de grupo válida.
+ * Si no, redirige a la página de acceso.
+ */
+function verificarAccesoEncargado(): void {
+    if (!esSesionEncargadoGrupo()) {
+        header('Location: ../acceso-encargado.php');
+        exit();
+    }
+}
+
+/**
+ * Retorna el grupo_id de la sesión del encargado.
+ */
+function obtenerGrupoEncargado(): int {
+    return (int)($_SESSION['encargado_grupo_id'] ?? 0);
+}
+
+/**
+ * Cierra la sesión del encargado de grupo.
+ */
+function cerrarSesionEncargado(): void {
+    unset(
+        $_SESSION['encargado_grupo_id'],
+        $_SESSION['encargado_grupo_nombre'],
+        $_SESSION['encargado_grupo_codigo']
+    );
+}
+
+/**
+ * Crea una sesión de encargado de grupo.
+ */
+function iniciarSesionEncargado(array $grupo): void {
+    $_SESSION['encargado_grupo_id']     = (int)$grupo['id'];
+    $_SESSION['encargado_grupo_nombre'] = $grupo['encargado_nombre'];
+    $_SESSION['encargado_grupo_codigo'] = $grupo['codigo_acceso'];
+}
+
 ?>
 
 
