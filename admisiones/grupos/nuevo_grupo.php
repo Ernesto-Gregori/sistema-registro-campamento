@@ -15,7 +15,7 @@ $semana_id = $_GET['semana_id'] ?? null;
 $error     = '';
 $message   = '';
 
-$simplexlsx_ok = class_exists('Shuchkin\SimpleXLSX');
+$simplexlsx_ok = class_exists('Shuchkin\\SimpleXLSX');
 
 $stmt = $pdo->prepare("SELECT * FROM semanas_campamento WHERE year_campamento = ? ORDER BY fecha_inicio");
 $stmt->execute([$year]);
@@ -119,15 +119,28 @@ if ($_POST) {
 
         $pdo->beginTransaction();
 
+        // Generar código de acceso único
+        $codigo_acceso = generarCodigoAccesoGrupo();
+        $intentos = 0;
+        while ($intentos < 10) {
+            $check = $pdo->prepare("SELECT id FROM grupos_campamento WHERE codigo_acceso = ? LIMIT 1");
+            $check->execute([$codigo_acceso]);
+            if (!$check->fetch()) break;
+            $codigo_acceso = generarCodigoAccesoGrupo();
+            $intentos++;
+        }
+
         // Crear grupo
         $pdo->prepare("
             INSERT INTO grupos_campamento
                 (encargado_nombre, encargado_telefono, encargado_email,
-                 semana_id, year_campamento, costo_por_persona, notas, creado_por)
-            VALUES (?,?,?,?,?,?,?,?)
+                 semana_id, year_campamento, costo_por_persona, notas, creado_por,
+                 codigo_acceso)
+            VALUES (?,?,?,?,?,?,?,?,?)
         ")->execute([
             $enc_nombre, $enc_tel, $enc_email,
-            $sid, $year, $costo_pp, $notas, $_SESSION['user_id']
+            $sid, $year, $costo_pp, $notas, $_SESSION['user_id'],
+            $codigo_acceso
         ]);
         $grupo_id = $pdo->lastInsertId();
 
@@ -254,11 +267,13 @@ if ($_POST) {
         $pdo->commit();
 
         registrarLog($pdo, 'grupo_creado',
-            "Grupo del encargado '{$enc_nombre}' creado con {$insertados} acampantes",
+            "Grupo del encargado '{$enc_nombre}' creado con {$insertados} acampantes. Código: {$codigo_acceso}",
             'admisiones', 'success');
         
         $msg = "Grupo de '{$enc_nombre}' creado con {$insertados} acampantes";
         if ($omitidos_color > 0) $msg .= " ({$omitidos_color} filas oscuras ignoradas)";
+        // Guardar código en sesión flash para mostrarlo en ver_grupo.php
+        $_SESSION['codigo_acceso_nuevo'] = $codigo_acceso;
         header("Location: ver_grupo.php?id={$grupo_id}&message=" . urlencode("✅ $msg"));
         exit();
 
