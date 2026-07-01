@@ -22,6 +22,12 @@ if (empty($error) && isset($_SESSION['mensaje_error'])) {
     unset($_SESSION['mensaje_error']);
 }
 
+// ── Código de acceso recién creado ───────────────────────────────────────────
+$codigo_acceso_nuevo = $_SESSION['codigo_acceso_nuevo'] ?? '';
+if (!empty($codigo_acceso_nuevo)) {
+    unset($_SESSION['codigo_acceso_nuevo']);
+}
+
 if (!$id) { header('Location: lista_grupos.php'); exit(); }
 
 $stmt = $pdo->prepare("
@@ -190,6 +196,25 @@ include '../../includes/header.php';
 <?php if ($error): ?>
 <div class="alert alert-danger alert-dismissible fade show">
     <i class="fas fa-exclamation-triangle"></i> <?= htmlspecialchars($error) ?>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+<?php endif; ?>
+
+<?php if (!empty($codigo_acceso_nuevo) || (!empty($grupo['codigo_acceso']) && (esAdmisiones() || esAdministrador()))): ?>
+<?php $codigo_mostrar = $codigo_acceso_nuevo ?: ($grupo['codigo_acceso'] ?? ''); ?>
+<div class="alert alert-info alert-dismissible fade show">
+    <div class="d-flex align-items-center flex-wrap gap-2">
+        <i class="fas fa-key fa-lg"></i>
+        <div>
+            <strong>Código de acceso para el encargado:</strong>
+            <span class="font-monospace fs-5 mx-2"><?= htmlspecialchars($codigo_mostrar) ?></span>
+            <div class="small text-muted">
+                El encargado puede usar este código junto con su nombre en
+                <a href="../../acceso-encargado.php" target="_blank" class="alert-link">acceso-encargado.php</a>
+                para ver y gestionar su grupo.
+            </div>
+        </div>
+    </div>
     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
 <?php endif; ?>
