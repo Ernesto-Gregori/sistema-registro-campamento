@@ -77,42 +77,36 @@ if ($_POST && ($_POST['accion'] ?? '') === 'agregar_pago') {
         $error = "Sin permisos para registrar pagos.";
     } else {
         try {
-            // ... resto del código sin cambios
+            $monto      = (float)($_POST['monto'] ?? 0);
+            $modo       = $_POST['modo_pago'] ?? 'efectivo';
+            $notas_p    = trim($_POST['notas'] ?? '');
+            $fecha_pago = $_POST['fecha_pago'] ?? date('Y-m-d H:i:s');
+
+            if ($monto <= 0) throw new Exception("El monto debe ser mayor a 0");
+
+            $saldo_info = calcularSaldoGrupo($pdo, $id);
+            if ($monto > $saldo_info['saldo'] + 0.01) {
+                throw new Exception(
+                    "El monto (\$" . number_format($monto, 2) . ") supera el saldo pendiente (\$" .
+                    number_format($saldo_info['saldo'], 2) . ")"
+                );
+            }
+
+            $pdo->beginTransaction();
+            $pdo->prepare("
+                INSERT INTO pagos_grupo (grupo_id, monto, modo_pago, notas, registrado_por, fecha_pago)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ")->execute([$id, $monto, $modo, $notas_p, $_SESSION['user_id'], $fecha_pago]);
+            $pdo->commit();
+
+            registrarLog($pdo, 'pago_grupo',
+                "Pago \${$monto} encargado '{$grupo['encargado_nombre']}'",
+                'admisiones', 'success');
+            $message = "✅ Pago de $" . number_format($monto, 2) . " registrado";
         } catch (Exception $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             $error = $e->getMessage();
         }
-    }
-    try {
-        $monto      = (float)($_POST['monto'] ?? 0);
-        $modo       = $_POST['modo_pago'] ?? 'efectivo';
-        $notas_p    = trim($_POST['notas'] ?? '');
-        $fecha_pago = $_POST['fecha_pago'] ?? date('Y-m-d H:i:s');
-
-        if ($monto <= 0) throw new Exception("El monto debe ser mayor a 0");
-
-        $saldo_info = calcularSaldoGrupo($pdo, $id);
-        if ($monto > $saldo_info['saldo'] + 0.01) {
-            throw new Exception(
-                "El monto (\$" . number_format($monto, 2) . ") supera el saldo pendiente (\$" .
-                number_format($saldo_info['saldo'], 2) . ")"
-            );
-        }
-
-        $pdo->beginTransaction();
-        $pdo->prepare("
-            INSERT INTO pagos_grupo (grupo_id, monto, modo_pago, notas, registrado_por, fecha_pago)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ")->execute([$id, $monto, $modo, $notas_p, $_SESSION['user_id'], $fecha_pago]);
-        $pdo->commit();
-
-        registrarLog($pdo, 'pago_grupo',
-            "Pago \${$monto} encargado '{$grupo['encargado_nombre']}'",
-            'admisiones', 'success');
-        $message = "✅ Pago de $" . number_format($monto, 2) . " registrado";
-    } catch (Exception $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
-        $error = $e->getMessage();
     }
 }
 
